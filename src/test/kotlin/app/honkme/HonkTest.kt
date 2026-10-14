@@ -120,6 +120,8 @@ class HonkTest {
             assertTrue(UUID_V7.matches(r[6].header("Idempotency-Key")!!))
             assertEquals("""{"message":"failing","severity":"critical","group_key":"q","event_type":"problem"}""", r[7].body)
         }
+        assertEquals(Message.problem("db/backup", "Backup failed", "exit 1").build(), Message.uhoh("db/backup", "Backup failed", "exit 1").build())
+        assertEquals(Message.recovery("db/backup", null, "exit 0").build(), Message.phew("db/backup", null, "exit 0").build())
     }
 
     @Test

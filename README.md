@@ -20,7 +20,7 @@ honk.phew("kitchen/freezer", "Freezer closed", "Back to −18 °C. The ice cream
 starts with a problem and ends with the fix, not two separate alarms.
 
 - JDK 17+, `java.net.http.HttpClient` (keep-alive, HTTP/2 over https).
-- Kotlin: `suspend` API with cancellation. Java: `sendBlocking`, `sendAsync`
+- Kotlin: `suspend` API with cancellation. Java: `honkBlocking`, `honkAsync`
   (`CompletableFuture`), builders and static helpers.
 - Retries with backoff, `Retry-After`, a total deadline and an idempotency key on every send,
   so a retry never creates a duplicate.
@@ -68,7 +68,7 @@ import app.honkme.Honk;
 import app.honkme.Message;
 
 Honk honk = Honk.fromEnvironment();
-honk.sendBlocking(Message.beep("Backup finished", "nightly pg_dump took 42 s").build());
+honk.honkBlocking(Message.beep("Backup finished", "nightly pg_dump took 42 s").build());
 ```
 
 Explicitly: `Honk(url, key)` in Kotlin (named arguments for the options), or
@@ -124,7 +124,7 @@ class CustomerRequestNotifier {
             .url("https://shop.example.com/admin/requests/" + r.id())   // https only
             .meta("request_id", String.valueOf(r.id()))
             .build();
-        honk.sendAsync(message, "request-" + r.id())              // same request, same key
+        honk.honkAsync(message, "request-" + r.id())              // same request, same key
             .exceptionally(e -> { log.warn("honk: {}", e.getMessage()); return null; });
     }
 }
@@ -155,8 +155,8 @@ request (`requests/<id>`), and a shared key only for repeats of the same problem
 
 ```kotlin
 suspend fun honk(message: Message, idempotencyKey: String? = null): Accepted       // id, duplicate, receivedAt
-fun sendAsync(message: Message, idempotencyKey: String? = null): CompletableFuture<Accepted>
-fun sendBlocking(message: Message, idempotencyKey: String? = null): Accepted
+fun honkAsync(message: Message, idempotencyKey: String? = null): CompletableFuture<Accepted>   // Java
+fun honkBlocking(message: Message, idempotencyKey: String? = null): Accepted                    // Java
 ```
 
 | Field | Notes |
@@ -187,12 +187,14 @@ honk.phew("db/backup", "Backup OK", "pg_dump finished in 41 s")          // its 
 honk.honk(Message("Imported 1 204 rows", severity = Severity.BEEP, channel = "imports"))
 ```
 
-`send`, `problem` and `recovery` still work: they are `honk`, `uhoh` and `phew` under their
-older names, with no deprecation warning.
+`send`, `problem`, `recovery`, `sendBlocking`, `sendAsync`, `Message.problem` and
+`Message.recovery` still work: they are `honk`, `uhoh`, `phew`, `honkBlocking`, `honkAsync`,
+`Message.uhoh` and `Message.phew` under their older names, with no deprecation warning.
 
 ```java
-honk.sendBlocking(Message.problem("db/backup", "Backup failed", "pg_dump exited with 1").meta("exit", 1).build());
-honk.sendAsync(Message.builder().title("Disk 91%").message("/var on app-01").loud().build());
+honk.honkBlocking(Message.uhoh("db/backup", "Backup failed", "pg_dump exited with 1").meta("exit", 1).build());
+honk.honkBlocking(Message.phew("db/backup", "Backup OK", "pg_dump finished in 41 s").build());
+honk.honkAsync(Message.builder().title("Disk 91%").message("/var on app-01").loud().build());
 ```
 
 Options (Kotlin named arguments or `Honk.builder()`): `timeoutMs` 5000 per attempt, `retries` 4,
@@ -230,7 +232,7 @@ rejected as `actions[i].url`.
 - Everything stops at `deadlineMs`: if the next wait would cross it (for example a daily quota
   that resets at midnight), the exception is thrown at once with `retryAfter`.
 - `4xx` other than `429` are never retried. Coroutine cancellation (and cancelling the
-  `CompletableFuture` of `sendAsync`) stops the send.
+  `CompletableFuture` of `honkAsync`) stops the send.
 
 ## Errors
 
@@ -249,7 +251,7 @@ All exceptions are unchecked and extend `HonkException` (`status`, `code`, `requ
 
 ```java
 try {
-    honk.sendBlocking(Message.longHonk("Payment failed", "Stripe declined order 1042").groupKey("payments/stripe").build());
+    honk.honkBlocking(Message.longHonk("Payment failed", "Stripe declined order 1042").groupKey("payments/stripe").build());
 } catch (HonkValidationException e) {
     log.error("bug: {}", e.getFields());
 } catch (HonkException e) {

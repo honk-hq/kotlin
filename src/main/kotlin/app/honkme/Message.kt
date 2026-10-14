@@ -157,6 +157,14 @@ public data class Message @JvmOverloads constructor(
         public fun recovery(groupKey: String, title: String?, message: String): Builder =
             builder().groupKey(groupKey).eventType(EventType.RECOVERY).severity(Severity.SUCCESS).title(title).message(message)
 
+        /** Uh-oh: the same builder as [problem] (a problem for [groupKey]; severity defaults to LONG). */
+        @JvmStatic
+        public fun uhoh(groupKey: String, title: String?, message: String): Builder = problem(groupKey, title, message)
+
+        /** Phew: the same builder as [recovery] (a recovery for [groupKey]; severity defaults to BEEP). */
+        @JvmStatic
+        public fun phew(groupKey: String, title: String?, message: String): Builder = recovery(groupKey, title, message)
+
         @JvmStatic public fun light(title: String?, message: String): Builder = builder().light().title(title).message(message)
 
         @JvmStatic public fun beep(title: String?, message: String): Builder = builder().beep().title(title).message(message)

@@ -16,8 +16,11 @@ All notable changes to `app.honk-me:honk` (Maven) are documented here. The forma
 ### Added
 - `honk(message, idempotencyKey)`, `uhoh(groupKey, title, message)` and
   `phew(groupKey, title, message)` suspend functions on `Honk`.
-- `send`, `problem` and `recovery` stay, without deprecation warnings, as plain aliases of
-  `honk`, `uhoh` and `phew`: same arguments, same results.
+- For Java: `honkBlocking` and `honkAsync` on `Honk`, and the `Message.uhoh(groupKey, title,
+  message)` and `Message.phew(…)` builders.
+- `send`, `problem`, `recovery`, `sendBlocking`, `sendAsync`, `Message.problem` and
+  `Message.recovery` stay, without deprecation warnings, as plain aliases of the new names:
+  same arguments, same results.
 - `Message.actions`: up to 3 `Action(title, url)` buttons (`https://`, `mailto:`, `tel:` or
   `sms:`), sent as `actions` and omitted when empty; `Message.Builder.action(title, url)` and
   `actions(list)`. Validated locally like the server, with errors on `actions`,

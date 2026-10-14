@@ -33,8 +33,9 @@ import kotlin.random.Random
  * `honk.uhoh("db/backup", "Backup failed", "pg_dump exited with 1")` and later
  * `honk.phew("db/backup", "Backup OK", "pg_dump finished")`. [send], [problem] and [recovery] are
  * the same functions as [honk], [uhoh] and [phew], under their older names.
- * Java: `honk.sendBlocking(Message.loud("Disk 91%", "/var on app-01").groupKey("disk/app-01/var").build())`
- * or `honk.sendAsync(...)` for a `CompletableFuture`.
+ * Java: `honk.honkBlocking(Message.loud("Disk 91%", "/var on app-01").groupKey("disk/app-01/var").build())`
+ * or `honk.honkAsync(...)` for a `CompletableFuture`; [sendBlocking] and [sendAsync] are the same
+ * functions under their older names.
  *
  * The ingestion key is a server-side secret: never ship it inside an Android or desktop app.
  */
@@ -155,6 +156,22 @@ public class Honk @JvmOverloads constructor(
     @JvmOverloads
     public fun sendAsync(message: Message, idempotencyKey: String? = null): CompletableFuture<Accepted> =
         scope.future { send(message, idempotencyKey) }
+
+    /**
+     * [honk] as a `CompletableFuture`, for Java. The same function as [sendAsync]: cancelling the
+     * future cancels the send.
+     */
+    @JvmOverloads
+    public fun honkAsync(message: Message, idempotencyKey: String? = null): CompletableFuture<Accepted> =
+        sendAsync(message, idempotencyKey)
+
+    /**
+     * [honk], blocking the calling thread, for Java. The same function as [sendBlocking]: throws
+     * [HonkException] subclasses directly.
+     */
+    @JvmOverloads
+    public fun honkBlocking(message: Message, idempotencyKey: String? = null): Accepted =
+        sendBlocking(message, idempotencyKey)
 
     /** [send], blocking the calling thread, for Java. Throws [HonkException] subclasses directly. */
     @JvmOverloads
