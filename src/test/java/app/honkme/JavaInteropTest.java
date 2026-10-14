@@ -51,6 +51,39 @@ class JavaInteropTest {
     }
 
     @Test
+    void javaPlayfulNamesSendWhatTheOldNamesSend() throws Exception {
+        try (MockServer server = new MockServer(Step.Companion.accepted(false));
+             Honk honk = Honk.builder().url(server.getUrl()).key(MockServerKt.TEST_KEY).build()) {
+            Message order = Message.beep("New order", "Someone bought 3 rubber chickens").build();
+            honk.honkBlocking(order, "order-1042");
+            honk.sendBlocking(order, "order-1042");
+            honk.honkAsync(Message.uhoh("kitchen/freezer", "Freezer door open", "Open for 4 minutes").build(), "freezer-1").get();
+            honk.sendAsync(Message.problem("kitchen/freezer", "Freezer door open", "Open for 4 minutes").build(), "freezer-1").get();
+            honk.honkBlocking(Message.phew("kitchen/freezer", "Freezer closed", "The ice cream never knew.").build(), "freezer-2");
+            honk.sendBlocking(Message.recovery("kitchen/freezer", "Freezer closed", "The ice cream never knew.").build(), "freezer-2");
+            honk.honkBlocking(order);
+            honk.honkAsync(order).get();
+
+            List<Recorded> r = server.getRequests();
+            assertEquals(8, r.size());
+            for (int i = 0; i < 6; i += 2) {
+                assertEquals(r.get(i).getBody(), r.get(i + 1).getBody());
+                assertEquals(r.get(i).header("Idempotency-Key"), r.get(i + 1).header("Idempotency-Key"));
+            }
+            assertEquals("order-1042", r.get(0).header("Idempotency-Key"));
+            assertEquals("success", r.get(0).getJson().get("severity"));
+            assertEquals("problem", r.get(2).getJson().get("event_type"));
+            assertEquals("error", r.get(2).getJson().get("severity"));
+            assertEquals("freezer-1", r.get(2).header("Idempotency-Key"));
+            assertEquals("recovery", r.get(4).getJson().get("event_type"));
+            assertEquals("success", r.get(4).getJson().get("severity"));
+            assertEquals("kitchen/freezer", r.get(4).getJson().get("group_key"));
+            assertTrue(MockServerKt.getUUID_V7().matches(r.get(6).header("Idempotency-Key")));
+            assertTrue(MockServerKt.getUUID_V7().matches(r.get(7).header("Idempotency-Key")));
+        }
+    }
+
+    @Test
     void javaExceptions() {
         try (MockServer server = new MockServer(Step.Companion.error(429, "quota_exceeded", "3600", ""));
              Honk honk = new Honk(server.getUrl(), MockServerKt.TEST_KEY)) {
