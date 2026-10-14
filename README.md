@@ -1,7 +1,7 @@
 # Honk for Kotlin and Java
 
 [![CI](https://github.com/honk-me/honk-kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/honk-me/honk-kotlin/actions/workflows/ci.yml)
-[![Maven Central](https://img.shields.io/maven-central/v/app.honk-me/sdk)](https://central.sonatype.com/artifact/app.honk-me/sdk)
+[![Maven Central](https://img.shields.io/maven-central/v/app.honk-me/honk)](https://central.sonatype.com/artifact/app.honk-me/honk)
 
 Official Kotlin and Java client for [Honk](https://honk-me.app), the inbox that turns events
 from your apps, scripts, cron jobs and CI into calm, grouped push notifications on your phone.
@@ -23,14 +23,14 @@ Create a project and an ingestion key at [honk-me.app](https://honk-me.app). Its
 
 ```kotlin
 // build.gradle.kts
-dependencies { implementation("app.honk-me:sdk:0.1.0") }
+dependencies { implementation("app.honk-me:honk:0.1.0") }
 ```
 
 ```xml
 <!-- pom.xml -->
 <dependency>
   <groupId>app.honk-me</groupId>
-  <artifactId>sdk</artifactId>
+  <artifactId>honk</artifactId>
   <version>0.1.0</version>
 </dependency>
 ```

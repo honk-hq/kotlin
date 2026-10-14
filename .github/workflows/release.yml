@@ -1,4 +1,4 @@
-# Publishes GROUP:POM_ARTIFACT_ID:VERSION_NAME (gradle.properties; app.honk-me:sdk) to Maven
+# Publishes GROUP:POM_ARTIFACT_ID:VERSION_NAME (gradle.properties; app.honk-me:honk) to Maven
 # Central when a tag vX.Y.Z is pushed. The monorepo's sdk-mirror workflow pushes that tag for a
 # monorepo tag sdk-kotlin-vX.Y.Z.
 #

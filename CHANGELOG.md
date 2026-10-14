@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `app.honk-me:sdk` (Maven) are documented here. The format follows
+All notable changes to `app.honk-me:honk` (Maven) are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
