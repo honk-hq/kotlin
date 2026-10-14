@@ -4,9 +4,20 @@ All notable changes to `app.honk-me:honk` (Maven) are documented here. The forma
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - 2026-10-14
+
+### Changed
+- **Breaking:** the Maven artifact is now `app.honk-me:honk` (it was `app.honk-me:sdk`). The
+  package stays `app.honkme`, so imports don't change.
+
+  Upgrading: point the dependency at `implementation("app.honk-me:honk:0.3.0")` (Maven:
+  `<artifactId>honk</artifactId>`) and drop the old artifact; no code changes.
 
 ### Added
+- `honk(message, idempotencyKey)`, `uhoh(groupKey, title, message)` and
+  `phew(groupKey, title, message)` suspend functions on `Honk`.
+- `send`, `problem` and `recovery` stay, without deprecation warnings, as plain aliases of
+  `honk`, `uhoh` and `phew`: same arguments, same results.
 - `Message.actions`: up to 3 `Action(title, url)` buttons (`https://`, `mailto:`, `tel:` or
   `sms:`), sent as `actions` and omitted when empty; `Message.Builder.action(title, url)` and
   `actions(list)`. Validated locally like the server, with errors on `actions`,

@@ -88,6 +88,41 @@ class HonkTest {
     }
 
     @Test
+    fun `honk, uhoh and phew send exactly what send, problem and recovery send`() = runBlocking {
+        MockServer(Step.accepted()).use { s ->
+            val honk = client(s.url)
+            val order = Message("Someone bought 3 rubber chickens", title = "New order", severity = Severity.BEEP, category = Category.SALES)
+            honk.honk(order, "order-1042")
+            honk.send(order, "order-1042")
+            honk.uhoh("kitchen/freezer", "Freezer door open", "Open for 4 minutes") { priority(Priority.HIGH); idempotencyKey("freezer-1") }
+            honk.problem("kitchen/freezer", "Freezer door open", "Open for 4 minutes") { priority(Priority.HIGH); idempotencyKey("freezer-1") }
+            honk.phew("kitchen/freezer", "Freezer closed", "The ice cream never knew.") { idempotencyKey("freezer-2") }
+            honk.recovery("kitchen/freezer", "Freezer closed", "The ice cream never knew.") { idempotencyKey("freezer-2") }
+            honk.honk(order)
+            honk.uhoh("q", null, "failing") { groupKey("ignored"); severity(Severity.BLAST) }
+            val r = s.requests
+            assertEquals(8, r.size)
+            for (i in 0 until 6 step 2) {
+                assertEquals(r[i].body, r[i + 1].body)
+                assertEquals(r[i].header("Idempotency-Key"), r[i + 1].header("Idempotency-Key"))
+            }
+            assertEquals("order-1042", r[0].header("Idempotency-Key"))
+            assertEquals("""{"title":"New order","message":"Someone bought 3 rubber chickens","severity":"success","category":"sales"}""", r[0].body)
+            assertEquals(
+                """{"title":"Freezer door open","message":"Open for 4 minutes","severity":"error","priority":"high","group_key":"kitchen/freezer","event_type":"problem"}""",
+                r[2].body,
+            )
+            assertEquals("freezer-1", r[2].header("Idempotency-Key"))
+            assertEquals(
+                """{"title":"Freezer closed","message":"The ice cream never knew.","severity":"success","group_key":"kitchen/freezer","event_type":"recovery"}""",
+                r[4].body,
+            )
+            assertTrue(UUID_V7.matches(r[6].header("Idempotency-Key")!!))
+            assertEquals("""{"message":"failing","severity":"critical","group_key":"q","event_type":"problem"}""", r[7].body)
+        }
+    }
+
+    @Test
     fun `retries reuse the idempotency key and body`() = runBlocking {
         MockServer(Step.error(503, "unavailable", "0"), Step.error(500, "internal"), Step.Drop, Step.accepted()).use { s ->
             client(s.url).send(Message("x"))

@@ -29,7 +29,10 @@ import kotlin.random.Random
  * Client for `POST /v1/messages`. Create one per process and reuse it (connections are kept
  * alive); [close] it on shutdown.
  *
- * Kotlin: `honk.loud("Disk 91%", "/var on app-01") { groupKey("disk/app-01/var") }` (suspend).
+ * Kotlin: `honk.loud("Disk 91%", "/var on app-01") { groupKey("disk/app-01/var") }` (suspend), or
+ * `honk.uhoh("db/backup", "Backup failed", "pg_dump exited with 1")` and later
+ * `honk.phew("db/backup", "Backup OK", "pg_dump finished")`. [send], [problem] and [recovery] are
+ * the same functions as [honk], [uhoh] and [phew], under their older names.
  * Java: `honk.sendBlocking(Message.loud("Disk 91%", "/var on app-01").groupKey("disk/app-01/var").build())`
  * or `honk.sendAsync(...)` for a `CompletableFuture`.
  *
@@ -141,6 +144,13 @@ public class Honk @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Honks: sends one event. The same function as [send], under its new name: same arguments,
+     * same retries, same result.
+     */
+    public suspend fun honk(message: Message, idempotencyKey: String? = null): Accepted =
+        send(message, idempotencyKey)
+
     /** [send] as a `CompletableFuture`, for Java. Cancelling the future cancels the send. */
     @JvmOverloads
     public fun sendAsync(message: Message, idempotencyKey: String? = null): CompletableFuture<Accepted> =
@@ -165,6 +175,20 @@ public class Honk @JvmOverloads constructor(
     /** A recovery for [groupKey] (closes its open incident); severity defaults to BEEP (success). */
     public suspend fun recovery(groupKey: String, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         send(Message.recovery(groupKey, title, message).apply(configure).groupKey(groupKey).eventType(EventType.RECOVERY).build())
+
+    /**
+     * Uh-oh: a problem for [groupKey]. The same function as [problem]: opens or continues the
+     * group's incident, a long honk (error) by default.
+     */
+    public suspend fun uhoh(groupKey: String, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
+        problem(groupKey, title, message, configure)
+
+    /**
+     * Phew: a recovery for [groupKey]. The same function as [recovery]: closes the group's open
+     * incident, a beep (success) by default.
+     */
+    public suspend fun phew(groupKey: String, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
+        recovery(groupKey, title, message, configure)
 
     /** A light honk (info). */
     public suspend fun light(title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =

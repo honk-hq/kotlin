@@ -6,6 +6,19 @@
 Official Kotlin and Java client for [Honk](https://honk-me.app), the inbox that turns events
 from your apps, scripts, cron jobs and CI into calm, grouped push notifications on your phone.
 
+```kotlin
+import app.honkme.Honk
+
+val honk = Honk.fromEnvironment()
+
+honk.uhoh("kitchen/freezer", "Freezer door open", "−4 °C and rising")
+// someone closes it with their hip
+honk.phew("kitchen/freezer", "Freezer closed", "Back to −18 °C. The ice cream never knew.")
+```
+
+`uhoh` opens an incident for `kitchen/freezer`, `phew` closes it: one group on your phone that
+starts with a problem and ends with the fix, not two separate alarms.
+
 - JDK 17+, `java.net.http.HttpClient` (keep-alive, HTTP/2 over https).
 - Kotlin: `suspend` API with cancellation. Java: `sendBlocking`, `sendAsync`
   (`CompletableFuture`), builders and static helpers.
@@ -23,7 +36,7 @@ Create a project and an ingestion key at [honk-me.app](https://honk-me.app). Its
 
 ```kotlin
 // build.gradle.kts
-dependencies { implementation("app.honk-me:honk:0.1.0") }
+dependencies { implementation("app.honk-me:honk:0.3.0") }
 ```
 
 ```xml
@@ -31,7 +44,7 @@ dependencies { implementation("app.honk-me:honk:0.1.0") }
 <dependency>
   <groupId>app.honk-me</groupId>
   <artifactId>honk</artifactId>
-  <version>0.1.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
@@ -136,12 +149,12 @@ scope.launch {
 Messages with the same `groupKey` (per project, environment, source and channel) form one group:
 the first one pushes, repeats update it calmly instead of buzzing again. Use one key per customer
 request (`requests/<id>`), and a shared key only for repeats of the same problem
-(`queue/failed-jobs`). `problem`/`recovery` pairs need a `groupKey`.
+(`queue/failed-jobs`). `uhoh`/`phew` pairs need a `groupKey`.
 
 ## Sending
 
 ```kotlin
-suspend fun send(message: Message, idempotencyKey: String? = null): Accepted       // id, duplicate, receivedAt
+suspend fun honk(message: Message, idempotencyKey: String? = null): Accepted       // id, duplicate, receivedAt
 fun sendAsync(message: Message, idempotencyKey: String? = null): CompletableFuture<Accepted>
 fun sendBlocking(message: Message, idempotencyKey: String? = null): Accepted
 ```
@@ -162,17 +175,20 @@ fun sendBlocking(message: Message, idempotencyKey: String? = null): Accepted
 | `metadata` (`meta(k, v)`) | ≤ 16 keys `[A-Za-z0-9_.-]{1,64}`; String (≤ 512 characters), Number or Boolean values |
 | `ttlSeconds` | push lifetime 60–86400 (default 3600) |
 | `sourceSequence` | 0 … 2^53-1, needs `groupKey` |
-| `idempotencyKey` | 1–128 printable ASCII characters (also a `send` argument) |
+| `idempotencyKey` | 1–128 printable ASCII characters (also a `honk` argument) |
 
 null and empty optional fields are omitted. A returned `Accepted` means Honk **durably stored**
 the message (202), not that a push was delivered or read.
 
 ```kotlin
 honk.loud("Disk 91%", "/var on app-01") { groupKey("disk/app-01/var") }
-honk.problem("db/backup", "Backup failed", "pg_dump exited with 1")      // a long honk by default
-honk.recovery("db/backup", "Backup OK", "pg_dump finished in 41 s")      // a beep by default
-honk.send(Message("Imported 1 204 rows", severity = Severity.BEEP, channel = "imports"))
+honk.uhoh("db/backup", "Backup failed", "pg_dump exited with 1")         // a problem: a long honk by default
+honk.phew("db/backup", "Backup OK", "pg_dump finished in 41 s")          // its recovery: a beep by default
+honk.honk(Message("Imported 1 204 rows", severity = Severity.BEEP, channel = "imports"))
 ```
+
+`send`, `problem` and `recovery` still work: they are `honk`, `uhoh` and `phew` under their
+older names, with no deprecation warning.
 
 ```java
 honk.sendBlocking(Message.problem("db/backup", "Backup failed", "pg_dump exited with 1").meta("exit", 1).build());
