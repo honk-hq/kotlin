@@ -1,7 +1,7 @@
 # Honk for Kotlin and Java
 
-[![CI](https://github.com/honk-me/honk-kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/honk-me/honk-kotlin/actions/workflows/ci.yml)
-[![Maven Central](https://img.shields.io/maven-central/v/app.honk-me/honk)](https://central.sonatype.com/artifact/app.honk-me/honk)
+[![CI](https://github.com/honkhonk/kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/honkhonk/kotlin/actions/workflows/ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/app.honk-honk/honk)](https://central.sonatype.com/artifact/app.honk-honk/honk)
 
 Official Kotlin and Java client for [Honk](https://honk-honk.app), the inbox that turns events
 from your apps, scripts, cron jobs and CI into calm, grouped push notifications on your phone.
@@ -36,15 +36,15 @@ Create a project and an ingestion key at [honk-honk.app](https://honk-honk.app).
 
 ```kotlin
 // build.gradle.kts
-dependencies { implementation("app.honk-me:honk:0.3.0") }
+dependencies { implementation("app.honk-honk:honk:0.4.0") }
 ```
 
 ```xml
 <!-- pom.xml -->
 <dependency>
-  <groupId>app.honk-me</groupId>
+  <groupId>app.honk-honk</groupId>
   <artifactId>honk</artifactId>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
 </dependency>
 ```
 
@@ -285,8 +285,8 @@ Maven Central (see `CHANGELOG.md`).
 ## Links
 
 - [honk-honk.app](https://honk-honk.app): the Honk inbox (web, iPhone).
-- Other SDKs: [Node.js](https://github.com/honk-me/honk-node),
-  [PHP / Laravel](https://github.com/honk-me/honk-php), [Go + CLI](https://github.com/honk-me/honk-go),
-  [Swift](https://github.com/honk-me/honk-swift).
+- Other SDKs: [Node.js](https://github.com/honkhonk/node),
+  [PHP / Laravel](https://github.com/honkhonk/php), [Go + CLI](https://github.com/honkhonk/go),
+  [Swift](https://github.com/honkhonk/swift).
 
 MIT License.

@@ -1,8 +1,13 @@
 # Changelog
 
-All notable changes to `app.honk-me:honk` (Maven) are documented here. The format follows
+All notable changes to `app.honk-honk:honk` (Maven) are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
+
+## [0.4.0] - 2026-10-15
+
+### Changed
+- The Maven coordinate is now `app.honk-honk:honk`.
 
 ## [0.3.0] - 2026-10-14
 

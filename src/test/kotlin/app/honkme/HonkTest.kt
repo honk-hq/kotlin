@@ -37,7 +37,7 @@ class HonkTest {
             assertEquals("/v1/messages", r.path)
             assertEquals("Bearer $TEST_KEY", r.header("Authorization"))
             assertEquals("application/json", r.header("Content-Type"))
-            assertEquals("honk-me-kotlin/${Honk.VERSION}", r.header("User-Agent"))
+            assertEquals("honk-kotlin/${Honk.VERSION}", r.header("User-Agent"))
             assertTrue(UUID_V7.matches(r.header("Idempotency-Key")!!))
             assertEquals(
                 """{"title":"Redis connection failed","message":"Billing API could not connect to Redis after 3 attempts.","severity":"error","priority":"high","category":"infrastructure","source":"billing-api","environment":"production","channel":"infrastructure","group_key":"billing/redis/connectivity","event_type":"problem","occurred_at":"2026-10-01T21:10:00.000Z","url":"https://example.com/incidents/redis","image_url":"https://cdn.example.com/a.jpg?w=1&h=2","actions":[{"title":"Runbook","url":"https://example.com/runbooks/redis"},{"title":"Call on-call","url":"tel:+15550134"}],"metadata":{"host":"app-01","attempts":3,"retried":true,"ratio":0.5},"ttl_seconds":3600,"source_sequence":42}""",

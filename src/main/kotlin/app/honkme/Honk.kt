@@ -82,7 +82,7 @@ public class Honk @JvmOverloads constructor(
         }
         this.url = base
         this.key = k
-        this.userAgent = "honk-me-kotlin/$VERSION" + (userAgent?.let { " $it" } ?: "")
+        this.userAgent = "honk-kotlin/$VERSION" + (userAgent?.let { " $it" } ?: "")
         this.http = httpClient ?: HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)
             .connectTimeout(Duration.ofMillis(timeoutMs))
