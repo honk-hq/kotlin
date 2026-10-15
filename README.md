@@ -3,7 +3,7 @@
 [![CI](https://github.com/honk-me/honk-kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/honk-me/honk-kotlin/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/app.honk-me/honk)](https://central.sonatype.com/artifact/app.honk-me/honk)
 
-Official Kotlin and Java client for [Honk](https://honk-me.app), the inbox that turns events
+Official Kotlin and Java client for [Honk](https://honk-honk.app), the inbox that turns events
 from your apps, scripts, cron jobs and CI into calm, grouped push notifications on your phone.
 
 ```kotlin
@@ -29,7 +29,7 @@ starts with a problem and ends with the fix, not two separate alarms.
 The ingestion key (`honk_…`) is a secret: use this library on servers, in jobs and CLIs. Never
 ship it inside an Android or desktop app; have the app call your backend instead.
 
-Create a project and an ingestion key at [honk-me.app](https://honk-me.app). Its
+Create a project and an ingestion key at [honk-honk.app](https://honk-honk.app). Its
 *Integrations* page generates ready-to-paste code for this library.
 
 ## Install
@@ -284,7 +284,7 @@ Maven Central (see `CHANGELOG.md`).
 
 ## Links
 
-- [honk-me.app](https://honk-me.app): the Honk inbox (web, iPhone).
+- [honk-honk.app](https://honk-honk.app): the Honk inbox (web, iPhone).
 - Other SDKs: [Node.js](https://github.com/honk-me/honk-node),
   [PHP / Laravel](https://github.com/honk-me/honk-php), [Go + CLI](https://github.com/honk-me/honk-go),
   [Swift](https://github.com/honk-me/honk-swift).
