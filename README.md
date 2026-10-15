@@ -1,6 +1,6 @@
 # Honk for Kotlin and Java
 
-[![CI](https://github.com/honkhonk/kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/honkhonk/kotlin/actions/workflows/ci.yml)
+[![CI](https://github.com/honk-hq/kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/honk-hq/kotlin/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/app.honk-honk/honk)](https://central.sonatype.com/artifact/app.honk-honk/honk)
 
 Official Kotlin and Java client for [Honk](https://honk-honk.app), the inbox that turns events
@@ -285,8 +285,8 @@ Maven Central (see `CHANGELOG.md`).
 ## Links
 
 - [honk-honk.app](https://honk-honk.app): the Honk inbox (web, iPhone).
-- Other SDKs: [Node.js](https://github.com/honkhonk/node),
-  [PHP / Laravel](https://github.com/honkhonk/php), [Go + CLI](https://github.com/honkhonk/go),
-  [Swift](https://github.com/honkhonk/honk-swift).
+- Other SDKs: [Node.js](https://github.com/honk-hq/node),
+  [PHP / Laravel](https://github.com/honk-hq/php), [Go + CLI](https://github.com/honk-hq/go),
+  [Swift](https://github.com/honk-hq/honk-swift).
 
 MIT License.
