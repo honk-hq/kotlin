@@ -31,12 +31,12 @@ val generateSdkVersion = tasks.register("generateSdkVersion") {
     inputs.property("version", sdkVersion)
     outputs.dir(outputDir)
     doLast {
-        val file = outputDir.get().file("app/honkme/SdkVersion.kt").asFile
+        val file = outputDir.get().file("app/honkhonk/SdkVersion.kt").asFile
         file.parentFile.mkdirs()
         file.writeText(
             """
             |// Generated from VERSION_NAME in gradle.properties. Do not edit.
-            |package app.honkme
+            |package app.honkhonk
             |
             |internal const val SDK_VERSION: String = "$sdkVersion"
             |""".trimMargin(),

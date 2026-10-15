@@ -1,4 +1,4 @@
-package app.honkme
+package app.honkhonk
 
 /**
  * Severity, lowest to highest. Every constant has a horn name on the Honk scale; the horn names

@@ -7,7 +7,7 @@ All notable changes to `app.honk-honk:honk` (Maven) are documented here. The for
 ## [0.4.0] - 2026-10-15
 
 ### Changed
-- The Maven coordinate is now `app.honk-honk:honk`.
+- The Maven coordinate is now `app.honk-honk:honk` and the package `app.honkhonk`.
 
 ## [0.3.0] - 2026-10-14
 

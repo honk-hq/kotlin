@@ -1,4 +1,4 @@
-package app.honkme
+package app.honkhonk
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName

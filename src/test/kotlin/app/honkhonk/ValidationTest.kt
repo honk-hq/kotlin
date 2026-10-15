@@ -1,4 +1,4 @@
-package app.honkme
+package app.honkhonk
 
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.params.ParameterizedTest

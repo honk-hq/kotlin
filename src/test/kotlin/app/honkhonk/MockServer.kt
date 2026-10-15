@@ -1,4 +1,4 @@
-package app.honkme
+package app.honkhonk
 
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress

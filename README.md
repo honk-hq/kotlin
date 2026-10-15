@@ -7,7 +7,7 @@ Official Kotlin and Java client for [Honk](https://honk-honk.app), the inbox tha
 from your apps, scripts, cron jobs and CI into calm, grouped push notifications on your phone.
 
 ```kotlin
-import app.honkme.Honk
+import app.honkhonk.Honk
 
 val honk = Honk.fromEnvironment()
 
@@ -48,14 +48,14 @@ dependencies { implementation("app.honk-honk:honk:0.4.0") }
 </dependency>
 ```
 
-Everything is in the package `app.honkme` (`import app.honkme.Honk`).
+Everything is in the package `app.honkhonk` (`import app.honkhonk.Honk`).
 
 ## Quick start
 
 Kotlin:
 
 ```kotlin
-import app.honkme.Honk
+import app.honkhonk.Honk
 
 val honk = Honk.fromEnvironment()                 // HONK_URL, HONK_KEY (+ HONK_SOURCE, HONK_ENVIRONMENT, HONK_CHANNEL)
 honk.beep("Backup finished", "nightly pg_dump took 42 s")   // suspend
@@ -64,8 +64,8 @@ honk.beep("Backup finished", "nightly pg_dump took 42 s")   // suspend
 Java:
 
 ```java
-import app.honkme.Honk;
-import app.honkme.Message;
+import app.honkhonk.Honk;
+import app.honkhonk.Message;
 
 Honk honk = Honk.fromEnvironment();
 honk.honkBlocking(Message.beep("Backup finished", "nightly pg_dump took 42 s").build());
