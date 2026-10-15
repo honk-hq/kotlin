@@ -287,6 +287,6 @@ Maven Central (see `CHANGELOG.md`).
 - [honk-honk.app](https://honk-honk.app): the Honk inbox (web, iPhone).
 - Other SDKs: [Node.js](https://github.com/honkhonk/node),
   [PHP / Laravel](https://github.com/honkhonk/php), [Go + CLI](https://github.com/honkhonk/go),
-  [Swift](https://github.com/honkhonk/swift).
+  [Swift](https://github.com/honkhonk/honk-swift).
 
 MIT License.
