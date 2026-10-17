@@ -190,7 +190,7 @@ public data class Message @JvmOverloads constructor(
 }
 
 /**
- * A button on a message: `Action("Call Emily", "tel:+15550134")`. Honk never opens the URL; the
+ * A button on a message: `Action("Call Maria", "tel:+15550134")`. Honk never opens the URL; the
  * phone does, when you tap the button.
  */
 public data class Action(

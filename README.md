@@ -208,9 +208,9 @@ them; the phone does when you tap one: Mail for `mailto:`, the Phone app for `te
 `sms:`, Safari for `https://`.
 
 ```kotlin
-honk.light("New quote request", "Emily Carter asked for a quote: 3 rooms, 2 bathrooms") {
+honk.light("New quote request", "Maria Tudor asked for a quote: 3 rooms, 2 bathrooms") {
     groupKey("requests/4812")
-    action("Reply", "mailto:emily@example.com?subject=Your%20quote")
+    action("Reply", "mailto:maria@example.com?subject=Your%20quote")
     action("Call", "tel:+15550134")
 }
 ```
