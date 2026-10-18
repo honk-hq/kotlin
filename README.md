@@ -1,9 +1,9 @@
-# Honk for Kotlin and Java
+# Honk! Honk! for Kotlin and Java
 
 [![CI](https://github.com/honk-hq/kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/honk-hq/kotlin/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/app.honk-honk/honk)](https://central.sonatype.com/artifact/app.honk-honk/honk)
 
-Official Kotlin and Java client for [Honk](https://honk-honk.app), the inbox that turns events
+Official Kotlin and Java client for [Honk! Honk!](https://honk-honk.app), the inbox that turns events
 from your apps, scripts, cron jobs and CI into calm, grouped push notifications on your phone.
 
 ```kotlin
@@ -177,7 +177,7 @@ fun honkBlocking(message: Message, idempotencyKey: String? = null): Accepted    
 | `sourceSequence` | 0 … 2^53-1, needs `groupKey` |
 | `idempotencyKey` | 1–128 printable ASCII characters (also a `honk` argument) |
 
-null and empty optional fields are omitted. A returned `Accepted` means Honk **durably stored**
+null and empty optional fields are omitted. A returned `Accepted` means Honk! Honk! **durably stored**
 the message (202), not that a push was delivered or read.
 
 ```kotlin
@@ -203,7 +203,7 @@ Options (Kotlin named arguments or `Honk.builder()`): `timeoutMs` 5000 per attem
 
 ## Actions
 
-Up to three buttons on a message, in display order (the first is the primary). Honk never opens
+Up to three buttons on a message, in display order (the first is the primary). Honk! Honk! never opens
 them; the phone does when you tap one: Mail for `mailto:`, the Phone app for `tel:`, Messages for
 `sms:`, Safari for `https://`.
 
@@ -225,7 +225,7 @@ rejected as `actions[i].url`.
 ## Retries and idempotency, guaranteed
 
 - Every send carries an `Idempotency-Key`: yours, or a fresh UUIDv7 (`UuidV7.generate()`).
-  **The same key is reused on every retry.** Within 24 h Honk answers a replay with the original
+  **The same key is reused on every retry.** Within 24 h Honk! Honk! answers a replay with the original
   id and `duplicate == true`, so a lost response never creates a second message.
 - Only network errors, timeouts, `429` and `5xx` are retried, with exponential backoff and full
   jitter (`random(0, min(8 s, 0.5 s·2ⁿ))`), never sooner than the server's `Retry-After`.
@@ -284,7 +284,7 @@ Maven Central (see `CHANGELOG.md`).
 
 ## Links
 
-- [honk-honk.app](https://honk-honk.app): the Honk inbox (web, iPhone).
+- [honk-honk.app](https://honk-honk.app): the Honk! Honk! inbox (web, iPhone).
 - Other SDKs: [Node.js](https://github.com/honk-hq/node),
   [PHP / Laravel](https://github.com/honk-hq/php), [Go + CLI](https://github.com/honk-hq/go),
   [Swift](https://github.com/honk-hq/honk-swift).

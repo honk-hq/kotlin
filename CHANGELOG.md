@@ -4,6 +4,12 @@ All notable changes to `app.honk-honk:honk` (Maven) are documented here. The for
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- The README and the POM's name, description and developer call the product Honk! Honk!; the
+  coordinate, the package and the API are unchanged.
+
 ## [0.4.0] - 2026-10-15
 
 ### Changed
