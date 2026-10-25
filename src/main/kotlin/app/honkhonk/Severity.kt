@@ -25,19 +25,19 @@ public enum class Severity(public val value: String) {
         }
 
     public companion object {
-        /** A light honk (info). */
+        /** A Light message (info). */
         @JvmField public val LIGHT: Severity = INFO
 
-        /** A beep-beep (success). */
+        /** A Beep message (success). */
         @JvmField public val BEEP: Severity = SUCCESS
 
-        /** A loud honk (warning). */
+        /** A Loud message (warning). */
         @JvmField public val LOUD: Severity = WARNING
 
-        /** A long honk (error). */
+        /** A Long message (error). */
         @JvmField public val LONG: Severity = ERROR
 
-        /** A blast (critical). */
+        /** A Blast message (critical). */
         @JvmField public val BLAST: Severity = CRITICAL
 
         /** Horn name → canonical severity. */

@@ -83,20 +83,20 @@ public data class Message @JvmOverloads constructor(
         /** A horn or canonical name, case-insensitively ("loud", "WARNING"). */
         public fun severity(severity: String): Builder = apply { this.severity = Severity.parse(severity) }
 
-        /** A light honk (info). */
+        /** A Light message (info). */
         public fun light(): Builder = severity(Severity.INFO)
 
-        /** A beep-beep (success). */
+        /** A Beep message (success). */
         public fun beep(): Builder = severity(Severity.SUCCESS)
 
-        /** A loud honk (warning). */
+        /** A Loud message (warning). */
         public fun loud(): Builder = severity(Severity.WARNING)
 
-        /** A long honk (error). Java: `longHonk()` (`long` is a Java keyword) or `error()`. */
+        /** A Long message (error). Java: `longHonk()` (`long` is a Java keyword) or `error()`. */
         @JvmName("longHonk")
         public fun long(): Builder = severity(Severity.ERROR)
 
-        /** A blast (critical). */
+        /** A Blast message (critical). */
         public fun blast(): Builder = severity(Severity.CRITICAL)
         public fun info(): Builder = light()
         public fun success(): Builder = beep()

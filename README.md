@@ -78,15 +78,18 @@ shutdown.
 
 ## The Honk scale
 
-Every severity has a horn name. Use either; the SDK always sends the canonical value.
+Five levels. The Honk app shows them by their standard names (Info, Success, Warning, Error,
+Critical); people who prefer horn sounds can switch on the Honk names (Light, Beep, Loud, Long,
+Blast) with the "Honk names for levels" switch in Settings. The SDK takes both: the canonical values and the
+Honk names as input aliases, in any case, and always sends the canonical value.
 
-| Horn | Severity | Kotlin helper | Java builder | Constant |
-|---|---|---|---|---|
-| light honk | `light` (info) | `honk.light(title, message)` | `Message.light(title, message)` / `.light()` | `Severity.LIGHT` |
-| beep-beep | `beep` (success) | `honk.beep(…)` | `Message.beep(…)` / `.beep()` | `Severity.BEEP` |
-| loud honk | `loud` (warning) | `honk.loud(…)` | `Message.loud(…)` / `.loud()` | `Severity.LOUD` |
-| long honk | `long` (error) | `honk.long(…)` | `Message.longHonk(…)` / `.longHonk()` (`long` is a Java keyword) | `Severity.LONG` |
-| blast | `blast` (critical) | `honk.blast(…)` | `Message.blast(…)` / `.blast()` | `Severity.BLAST` |
+| Level | Honk name | Severity | Kotlin helper | Java builder | Constant |
+|---|---|---|---|---|---|
+| Info | Light | `light` (info) | `honk.light(title, message)` | `Message.light(title, message)` / `.light()` | `Severity.LIGHT` |
+| Success | Beep | `beep` (success) | `honk.beep(…)` | `Message.beep(…)` / `.beep()` | `Severity.BEEP` |
+| Warning | Loud | `loud` (warning) | `honk.loud(…)` | `Message.loud(…)` / `.loud()` | `Severity.LOUD` |
+| Error | Long | `long` (error) | `honk.long(…)` | `Message.longHonk(…)` / `.longHonk()` (`long` is a Java keyword) | `Severity.LONG` |
+| Critical | Blast | `blast` (critical) | `honk.blast(…)` | `Message.blast(…)` / `.blast()` | `Severity.BLAST` |
 
 `Severity.LOUD === Severity.WARNING`; `Severity.parse("LOUD")` and the builder's
 `severity("loud")` accept horn and canonical names in any case. `LONG` and `BLAST` push at least
@@ -182,8 +185,8 @@ the message (202), not that a push was delivered or read.
 
 ```kotlin
 honk.loud("Disk 91%", "/var on app-01") { groupKey("disk/app-01/var") }
-honk.uhoh("db/backup", "Backup failed", "pg_dump exited with 1")         // a problem: a long honk by default
-honk.phew("db/backup", "Backup OK", "pg_dump finished in 41 s")          // its recovery: a beep by default
+honk.uhoh("db/backup", "Backup failed", "pg_dump exited with 1")         // a problem: a Long message by default
+honk.phew("db/backup", "Backup OK", "pg_dump finished in 41 s")          // its recovery: a Beep message by default
 honk.honk(Message("Imported 1 204 rows", severity = Severity.BEEP, channel = "imports"))
 ```
 

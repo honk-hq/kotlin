@@ -195,35 +195,35 @@ public class Honk @JvmOverloads constructor(
 
     /**
      * Uh-oh: a problem for [groupKey]. The same function as [problem]: opens or continues the
-     * group's incident, a long honk (error) by default.
+     * group's incident, a Long message (error) by default.
      */
     public suspend fun uhoh(groupKey: String, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         problem(groupKey, title, message, configure)
 
     /**
      * Phew: a recovery for [groupKey]. The same function as [recovery]: closes the group's open
-     * incident, a beep (success) by default.
+     * incident, a Beep message (success) by default.
      */
     public suspend fun phew(groupKey: String, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         recovery(groupKey, title, message, configure)
 
-    /** A light honk (info). */
+    /** A Light message (info). */
     public suspend fun light(title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         withSeverity(Severity.INFO, title, message, configure)
 
-    /** A beep-beep (success). */
+    /** A Beep message (success). */
     public suspend fun beep(title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         withSeverity(Severity.SUCCESS, title, message, configure)
 
-    /** A loud honk (warning). */
+    /** A Loud message (warning). */
     public suspend fun loud(title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         withSeverity(Severity.WARNING, title, message, configure)
 
-    /** A long honk (error; pushes at least as high priority). */
+    /** A Long message (error; pushes at least as high priority). */
     public suspend fun long(title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         withSeverity(Severity.ERROR, title, message, configure)
 
-    /** A blast (critical; pushes at least as high priority). */
+    /** A Blast message (critical; pushes at least as high priority). */
     public suspend fun blast(title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         withSeverity(Severity.CRITICAL, title, message, configure)
 
