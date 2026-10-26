@@ -16,8 +16,8 @@ class IntegrationTest {
     private val env = System.getenv()
     private val run = "kotlin-${UuidV7.generate()}"
 
-    private fun client(key: String? = null, validate: Boolean = true) =
-        Honk(env.getValue("HONK_URL"), key ?: env.getValue("HONK_KEY"), defaults = Defaults("sdk-kotlin-it", "test"), validate = validate)
+    private fun client(key: String? = null) =
+        Honk(env.getValue("HONK_URL"), key ?: env.getValue("HONK_KEY"), defaults = Defaults("sdk-kotlin-it", "test"))
 
     @Test
     fun `minimal message is accepted`() = runBlocking {
@@ -92,28 +92,27 @@ class IntegrationTest {
     }
 
     @Test
-    fun `urgent without allow urgent`() = runBlocking {
-        try {
-            assertTrue(client().send(Message("urgent $run", priority = Priority.URGENT)).id.startsWith("msg_")) // the key allows urgent
-        } catch (e: HonkAuthException) {
-            assertEquals(403, e.status)
-            assertEquals("priority_not_allowed", e.code)
-        }
+    fun `urgent without allow urgent is downgraded`() = runBlocking {
+        val accepted = client().send(Message("urgent $run", priority = Priority.URGENT))
+        assertTrue(accepted.id.startsWith("msg_"))
+        // A key with "allow urgent" keeps it; any other key gets it as high, with a warning.
+        assertTrue(accepted.warnings.isEmpty() || accepted.warnings.map { "${it.field}:${it.code}" } == listOf("priority:downgraded"))
     }
 
     @Test
-    fun `server side validation maps fields`() = runBlocking {
-        val e = assertFailsWith<HonkValidationException> { client(validate = false).send(Message("x", ttlSeconds = 5)) }
-        assertTrue(!e.isLocal && e.status == 422)
-        assertEquals(listOf("ttl_seconds:out_of_range"), e.fields.map { "${it.field}:${it.code}" })
-    }
-
-    @Test
-    fun `server side action validation maps fields`() = runBlocking {
+    fun `the server corrects what it can and says so`() = runBlocking {
+        val seen = mutableListOf<Warning>()
+        val honk = Honk(env.getValue("HONK_URL"), env.getValue("HONK_KEY"), defaults = Defaults("sdk-kotlin-it", "test"), onWarnings = { w, _ -> seen += w })
         val actions = listOf(Action("Call", "tel:+15550134"), Action("Open", "javascript:alert(1)"))
-        val e = assertFailsWith<HonkValidationException> { client(validate = false).send(Message("x", actions = actions)) }
-        assertTrue(!e.isLocal && e.status == 422)
-        assertEquals(listOf("actions[1].url:invalid_format"), e.fields.map { "${it.field}:${it.code}" })
+        val accepted = honk.send(Message("corrected $run", ttlSeconds = 5, actions = actions))
+        assertTrue(accepted.id.startsWith("msg_"))
+        assertEquals(listOf("actions[1].url:ignored", "ttl_seconds:clamped"), accepted.warnings.map { "${it.field}:${it.code}" }.sorted())
+        assertEquals(accepted.warnings, seen)
+    }
+
+    @Test
+    fun `recovery without a group key`() = runBlocking {
+        assertTrue(client().phew(null, "Recovered $run", "no group key needed").id.startsWith("msg_"))
     }
 
     @Test

@@ -4,7 +4,8 @@ package app.honkhonk
  * Severity, lowest to highest. Every constant has a horn name on the Honk scale; the horn names
  * are aliases of the canonical constants: `Severity.LOUD === Severity.WARNING`.
  *
- * LONG (error) and BLAST (critical) push at least as high priority.
+ * The level alone decides how the push interrupts: INFO and SUCCESS normal, WARNING and ERROR
+ * high, CRITICAL time-sensitive (breaks through Focus).
  */
 public enum class Severity(public val value: String) {
     INFO("info"),
@@ -61,7 +62,11 @@ public enum class Severity(public val value: String) {
     }
 }
 
-/** Declared priority. URGENT needs an ingestion key with "allow urgent". */
+/**
+ * Declared priority, stored for compatibility: the level decides how the push interrupts (LOW still
+ * makes an INFO, SUCCESS or WARNING message silent). URGENT from a key without "allow urgent" is
+ * sent as HIGH, with a `downgraded` warning.
+ */
 public enum class Priority(public val value: String) {
     LOW("low"), NORMAL("normal"), HIGH("high"), URGENT("urgent");
 
@@ -72,7 +77,7 @@ public enum class Priority(public val value: String) {
     }
 }
 
-/** PROBLEM opens an incident for its group, RECOVERY closes it; both need a group key. */
+/** PROBLEM opens an incident for its group, RECOVERY closes it (the group key is optional; without one they group by title). */
 public enum class EventType(public val value: String) {
     EVENT("event"), PROBLEM("problem"), RECOVERY("recovery");
 

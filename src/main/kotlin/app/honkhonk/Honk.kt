@@ -52,13 +52,13 @@ public class Honk @JvmOverloads constructor(
     public val deadlineMs: Long = 30_000,
     /** Source / environment / channel for messages that leave them unset. */
     public val defaults: Defaults = Defaults(),
-    /** Check messages locally before sending (the server always validates). */
-    public val validate: Boolean = true,
     public val backoff: Backoff = Backoff(),
     /** A custom HttpClient (proxies, executors). Configure it never to follow redirects. */
     httpClient: HttpClient? = null,
     /** Appended to the User-Agent header. */
     userAgent: String? = null,
+    /** Called with the server's corrections after an accepted send that has any ([Accepted.warnings]). */
+    public val onWarnings: WarningHandler? = null,
 ) : AutoCloseable {
     /** Normalised base URL. */
     public val url: String
@@ -94,12 +94,16 @@ public class Honk @JvmOverloads constructor(
      * push was delivered. Network errors, timeouts, 429 and 5xx are retried with the same
      * Idempotency-Key until [retries] or [deadlineMs] runs out.
      *
+     * Field contents are not checked here: the server shortens or leaves out what it cannot use
+     * and accepts the message anyway, listing each correction in [Accepted.warnings] (also passed
+     * to [onWarnings]). It refuses only what it cannot deliver ([HonkValidationException]).
+     *
      * @param idempotencyKey a stable key for this event (1–128 printable ASCII characters);
      *   default: the message's, else a new UUIDv7. Reused on every retry.
      * @throws HonkException (or a subclass); coroutine cancellation propagates as usual.
      */
     public suspend fun send(message: Message, idempotencyKey: String? = null): Accepted {
-        val body = Wire.encode(message, defaults, validate)
+        val body = Wire.encode(message, defaults)
         val key = idempotencyKey ?: message.idempotencyKey ?: UuidV7.generate()
         if (!Wire.validIdempotencyKey(key)) {
             throw HonkValidationException.local(
@@ -127,7 +131,7 @@ public class Honk @JvmOverloads constructor(
                 val response = withTimeoutOrNull(attemptMs) { http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).await() }
                 when {
                     response == null -> timeout(attemptMs, key, attempt, null)
-                    response.statusCode() in 200..299 -> return accepted(response, key, attempt)
+                    response.statusCode() in 200..299 -> return accepted(response, key, attempt).also { report(it) }
                     else -> errorFor(response, key, attempt)
                 }
             } catch (e: CancellationException) {
@@ -185,26 +189,32 @@ public class Honk @JvmOverloads constructor(
         }
     }
 
-    /** A problem for [groupKey] (opens or continues its incident); severity defaults to LONG (error). */
-    public suspend fun problem(groupKey: String, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
-        send(Message.problem(groupKey, title, message).apply(configure).groupKey(groupKey).eventType(EventType.PROBLEM).build())
+    /**
+     * A problem for [groupKey] (opens or continues its incident); severity defaults to LONG (error).
+     * A null [groupKey] groups by the title.
+     */
+    public suspend fun problem(groupKey: String?, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
+        send(Message.problem(groupKey, title, message).apply(configure).apply { if (groupKey != null) groupKey(groupKey) }.eventType(EventType.PROBLEM).build())
 
-    /** A recovery for [groupKey] (closes its open incident); severity defaults to BEEP (success). */
-    public suspend fun recovery(groupKey: String, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
-        send(Message.recovery(groupKey, title, message).apply(configure).groupKey(groupKey).eventType(EventType.RECOVERY).build())
+    /**
+     * A recovery for [groupKey] (closes its open incident); severity defaults to BEEP (success).
+     * A null [groupKey] groups by the title.
+     */
+    public suspend fun recovery(groupKey: String?, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
+        send(Message.recovery(groupKey, title, message).apply(configure).apply { if (groupKey != null) groupKey(groupKey) }.eventType(EventType.RECOVERY).build())
 
     /**
      * Uh-oh: a problem for [groupKey]. The same function as [problem]: opens or continues the
      * group's incident, a Long message (error) by default.
      */
-    public suspend fun uhoh(groupKey: String, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
+    public suspend fun uhoh(groupKey: String?, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         problem(groupKey, title, message, configure)
 
     /**
      * Phew: a recovery for [groupKey]. The same function as [recovery]: closes the group's open
      * incident, a Beep message (success) by default.
      */
-    public suspend fun phew(groupKey: String, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
+    public suspend fun phew(groupKey: String?, title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         recovery(groupKey, title, message, configure)
 
     /** A Light message (info). */
@@ -219,11 +229,11 @@ public class Honk @JvmOverloads constructor(
     public suspend fun loud(title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         withSeverity(Severity.WARNING, title, message, configure)
 
-    /** A Long message (error; pushes at least as high priority). */
+    /** A Long message (error; a high-priority push). */
     public suspend fun long(title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         withSeverity(Severity.ERROR, title, message, configure)
 
-    /** A Blast message (critical; pushes at least as high priority). */
+    /** A Blast message (critical; a time-sensitive push). */
     public suspend fun blast(title: String?, message: String, configure: Message.Builder.() -> Unit = {}): Accepted =
         withSeverity(Severity.CRITICAL, title, message, configure)
 
@@ -249,6 +259,16 @@ public class Honk @JvmOverloads constructor(
 
     private suspend fun withSeverity(severity: Severity, title: String?, message: String, configure: Message.Builder.() -> Unit): Accepted =
         send(Message.builder().title(title).message(message).apply(configure).severity(severity).build())
+
+    private fun report(accepted: Accepted) {
+        val handler = onWarnings ?: return
+        if (accepted.warnings.isEmpty()) return
+        try {
+            handler.onWarnings(accepted.warnings, accepted)
+        } catch (_: Exception) {
+            // The message was accepted; a failing log hook must not turn that into an error.
+        }
+    }
 
     /** Cancels pending [sendAsync] calls. The client cannot be used afterwards for async sends. */
     override fun close() {
@@ -299,7 +319,11 @@ public class Honk @JvmOverloads constructor(
             val id = data?.get("id") as? String
                 ?: throw HonkException("Honk answered ${response.statusCode()} without a message id", response.statusCode(), null, null, key, attempts)
             val received = (data["received_at"] as? String)?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: Instant.now()
-            return Accepted(id, data["duplicate"] == true, received)
+            val warnings = (data["warnings"] as? List<*>).orEmpty().mapNotNull { w ->
+                val m = w as? Map<*, *> ?: return@mapNotNull null
+                Warning(m["field"] as? String ?: "", m["code"] as? String ?: "", m["message"] as? String ?: "")
+            }
+            return Accepted(id, data["duplicate"] == true, received, warnings)
         }
 
         internal fun errorFor(response: HttpResponse<String>, key: String, attempts: Int): HonkException {
@@ -310,6 +334,7 @@ public class Honk @JvmOverloads constructor(
             val requestId = (error?.get("request_id") as? String) ?: response.headers().firstValue("X-Request-ID").orElse(null)
             val retryAfter = parseRetryAfter(response.headers().firstValue("Retry-After").orElse(null))
             val label = "Honk $status${code?.let { " $it" } ?: ""}: $text"
+            val request = requestId?.let { " [request $it]" } ?: ""
             return when (status) {
                 400, 413, 415, 422 -> {
                     val fields = (error?.get("fields") as? List<*>).orEmpty().mapNotNull { f ->
@@ -318,19 +343,19 @@ public class Honk @JvmOverloads constructor(
                         FieldError(field, m["code"] as? String ?: "invalid", m["message"] as? String)
                     }
                     val list = fields.joinToString("; ") { "${it.field} ${it.message ?: it.code}" }
-                    HonkValidationException(if (list.isEmpty()) label else "$label ($list)", fields, false, status, code, requestId, key, attempts)
+                    HonkValidationException((if (list.isEmpty()) label else "$label ($list)") + request, fields, false, status, code, requestId, key, attempts)
                 }
-                401, 403 -> HonkAuthException(label, status, code, requestId, key, attempts)
-                409 -> HonkConflictException(label, status, code, requestId, key, attempts)
-                429 -> HonkQuotaException(label, status, code, requestId, key, attempts, retryAfter)
-                in 500..599 -> HonkServerException(label, status, code, requestId, key, attempts, retryAfter)
+                401, 403 -> HonkAuthException(label + request, status, code, requestId, key, attempts)
+                409 -> HonkConflictException(label + request, status, code, requestId, key, attempts)
+                429 -> HonkQuotaException(label + request, status, code, requestId, key, attempts, retryAfter)
+                in 500..599 -> HonkServerException(label + request, status, code, requestId, key, attempts, retryAfter)
                 in 300..399 -> HonkException(
                     "Honk answered $status redirect" + (response.headers().firstValue("Location").map { " to $it" }.orElse("")) +
                         "; set url to the final https address",
                     status, code, requestId, key, attempts,
                 )
-                404 -> HonkException("$label (is url the base address of your Honk server?)", status, code, requestId, key, attempts)
-                else -> HonkException(label, status, code, requestId, key, attempts)
+                404 -> HonkException("$label (is url the base address of your Honk server?)$request", status, code, requestId, key, attempts)
+                else -> HonkException(label + request, status, code, requestId, key, attempts)
             }
         }
     }
@@ -343,10 +368,10 @@ public class Honk @JvmOverloads constructor(
         private var retries: Int = 4
         private var deadlineMs: Long = 30_000
         private var defaults: Defaults = Defaults()
-        private var validate: Boolean = true
         private var backoff: Backoff = Backoff()
         private var httpClient: HttpClient? = null
         private var userAgent: String? = null
+        private var onWarnings: WarningHandler? = null
 
         public fun url(url: String): Builder = apply { this.url = url }
         public fun key(key: String): Builder = apply { this.key = key }
@@ -354,10 +379,10 @@ public class Honk @JvmOverloads constructor(
         public fun retries(retries: Int): Builder = apply { this.retries = retries }
         public fun deadlineMs(deadlineMs: Long): Builder = apply { this.deadlineMs = deadlineMs }
         public fun defaults(defaults: Defaults): Builder = apply { this.defaults = defaults }
-        public fun validate(validate: Boolean): Builder = apply { this.validate = validate }
         public fun backoff(backoff: Backoff): Builder = apply { this.backoff = backoff }
         public fun httpClient(httpClient: HttpClient?): Builder = apply { this.httpClient = httpClient }
         public fun userAgent(userAgent: String?): Builder = apply { this.userAgent = userAgent }
-        public fun build(): Honk = Honk(url, key, timeoutMs, retries, deadlineMs, defaults, validate, backoff, httpClient, userAgent)
+        public fun onWarnings(onWarnings: WarningHandler?): Builder = apply { this.onWarnings = onWarnings }
+        public fun build(): Honk = Honk(url, key, timeoutMs, retries, deadlineMs, defaults, backoff, httpClient, userAgent, onWarnings)
     }
 }

@@ -2,11 +2,11 @@ package app.honkhonk
 
 import java.time.Duration
 
-/** One invalid field, from the server (`error.fields[]`) or local validation. */
+/** One field the server refused (`error.fields[]`), or the missing message/title found before sending. */
 public data class FieldError @JvmOverloads constructor(
     /** Wire name: `group_key`, `metadata.region`, `Idempotency-Key`, `body`, … */
     val field: String,
-    /** `required`, `too_long`, `too_short`, `invalid_enum`, `invalid_format`, `out_of_range`, `not_allowed`, `requires_group_key`, … */
+    /** `required`, `invalid_enum`, `invalid_format`, `invalid_utf8`, `too_long`, … */
     val code: String,
     val message: String? = null,
 )
@@ -36,12 +36,17 @@ public open class HonkException internal constructor(
     public open val isRetryable: Boolean get() = false
 }
 
-/** The message is invalid: rejected locally ([isLocal]) or by the server (400, 413, 415, 422). */
+/**
+ * The server refused the message (400, 413, 415, 422: invalid JSON, a body over 16 KiB, an unknown
+ * field, an invalid `event_type`, …), or it has neither a message nor a title ([isLocal]: nothing
+ * was sent). [fields] lists every refused field; the server corrects everything else and reports
+ * it in [Accepted.warnings] instead.
+ */
 public class HonkValidationException internal constructor(
     message: String,
     /** Every invalid field. */
     public val fields: List<FieldError>,
-    /** True when the SDK rejected the message before sending anything. */
+    /** True when nothing was sent (no message and no title, or an Idempotency-Key a header cannot carry). */
     public val isLocal: Boolean,
     status: Int? = null,
     code: String? = "validation_failed",
@@ -58,7 +63,7 @@ public class HonkValidationException internal constructor(
     }
 }
 
-/** 401/403: invalid or revoked key, `priority_not_allowed`, suspended project or workspace. */
+/** 401/403: invalid or revoked key, suspended project or workspace. */
 public class HonkAuthException internal constructor(
     message: String, status: Int?, code: String?, requestId: String?, idempotencyKey: String?, attempts: Int,
 ) : HonkException(message, status, code, requestId, idempotencyKey, attempts)

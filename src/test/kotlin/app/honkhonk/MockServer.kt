@@ -11,9 +11,10 @@ sealed interface Step {
     data object Drop : Step
 
     companion object {
-        fun accepted(duplicate: Boolean = false) = Respond(
+        @JvmOverloads
+        fun accepted(duplicate: Boolean = false, warnings: String = "[]") = Respond(
             202,
-            """{"id":"msg_01k6h3w4z5x6y7z8a9b0c1d2e3","status":"accepted","duplicate":$duplicate,"received_at":"2026-10-02T21:10:00.123Z"}""",
+            """{"id":"msg_01k6h3w4z5x6y7z8a9b0c1d2e3","status":"accepted","duplicate":$duplicate,"received_at":"2026-10-02T21:10:00.123Z","warnings":$warnings}""",
         )
 
         fun error(status: Int, code: String, retryAfter: String? = null, extra: String = "") = Respond(
@@ -78,5 +79,5 @@ fun client(
     retries: Int = 4,
     deadlineMs: Long = 30_000,
     defaults: Defaults = Defaults(),
-    validate: Boolean = true,
-) = Honk(url, TEST_KEY, timeoutMs, retries, deadlineMs, defaults, validate, Backoff(1, 5))
+    onWarnings: WarningHandler? = null,
+) = Honk(url, TEST_KEY, timeoutMs, retries, deadlineMs, defaults, Backoff(1, 5), onWarnings = onWarnings)

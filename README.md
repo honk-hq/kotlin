@@ -92,8 +92,9 @@ Honk names as input aliases, in any case, and always sends the canonical value.
 | Critical | Blast | `blast` (critical) | `honk.blast(…)` | `Message.blast(…)` / `.blast()` | `Severity.BLAST` |
 
 `Severity.LOUD === Severity.WARNING`; `Severity.parse("LOUD")` and the builder's
-`severity("loud")` accept horn and canonical names in any case. `LONG` and `BLAST` push at least
-as high priority. `info` … `critical` remain as synonyms.
+`severity("loud")` accept horn and canonical names in any case. The level alone decides how the
+push interrupts: Info and Success normal, Warning and Error high, Critical time-sensitive (it
+breaks through Focus). `info` … `critical` remain as synonyms.
 
 ## Recipe: notify me when a customer asks for something (Spring Boot)
 
@@ -120,7 +121,6 @@ class CustomerRequestNotifier {
     void on(CustomerRequestCreated event) {
         CustomerRequest r = event.request();
         Message message = Message.light("New request: " + r.subject(), r.name() + " (" + r.company() + ") asked: " + r.body())
-            .priority("high")                                     // push right away
             .category(Category.CUSTOMERS)
             .channel("requests")
             .groupKey("requests/" + r.id())                       // one group per request
@@ -138,7 +138,6 @@ Kotlin (Ktor, a coroutine-based service, …):
 ```kotlin
 scope.launch {
     honk.light("New request: ${r.subject}", "${r.name} (${r.company}) asked: ${r.body.take(2000)}") {
-        priority(Priority.HIGH)
         category(Category.CUSTOMERS)
         groupKey("requests/${r.id}")
         url("https://shop.example.com/admin/requests/${r.id}")
@@ -152,36 +151,39 @@ scope.launch {
 Messages with the same `groupKey` (per project, environment, source and channel) form one group:
 the first one pushes, repeats update it calmly instead of buzzing again. Use one key per customer
 request (`requests/<id>`), and a shared key only for repeats of the same problem
-(`queue/failed-jobs`). `uhoh`/`phew` pairs need a `groupKey`.
+(`queue/failed-jobs`). The key is optional: without one, messages group by their title (pass
+`null` to `uhoh`/`phew` for that).
 
 ## Sending
 
 ```kotlin
-suspend fun honk(message: Message, idempotencyKey: String? = null): Accepted       // id, duplicate, receivedAt
+suspend fun honk(message: Message, idempotencyKey: String? = null): Accepted       // id, duplicate, receivedAt, warnings
 fun honkAsync(message: Message, idempotencyKey: String? = null): CompletableFuture<Accepted>   // Java
 fun honkBlocking(message: Message, idempotencyKey: String? = null): Accepted                    // Java
 ```
 
 | Field | Notes |
 |---|---|
-| `message` | **required**, 1–8192 bytes UTF-8, line breaks allowed (`line()` appends one) |
-| `title` | ≤ 160 characters, one line; default: first line of `message` |
-| `severity` | `LIGHT` `BEEP` `LOUD` `LONG` `BLAST` (or `INFO` … `CRITICAL`) |
-| `priority` | `LOW` `NORMAL` `HIGH` `URGENT` (`URGENT` needs a key with *allow urgent*) |
+| `message` | text, line breaks allowed (`line()` appends one); kept up to 8192 bytes UTF-8 |
+| `title` | one line, kept up to 160 characters; default: first line of `message`. **A `message` or a `title` is required** |
+| `severity` | the level: `LIGHT` `BEEP` `LOUD` `LONG` `BLAST` (or `INFO` … `CRITICAL`); decides how loud the push is |
+| `priority` | `LOW` `NORMAL` `HIGH` `URGENT`, stored for compatibility (only `LOW` still matters: a silent push below `LONG`); `URGENT` from a key without *allow urgent* becomes `HIGH` |
 | `category` | `INFRASTRUCTURE` `SECURITY` `BACKUPS` `DEPLOYMENTS` `PAYMENTS` `CUSTOMERS` `SALES` `AUTOMATION` `PERSONAL` `OTHER` |
 | `source` / `environment` / `channel` | ≤ 64 / 32 / 64 characters; default `api` / `default` / `general` or `Defaults` |
-| `groupKey` | ≤ 128 characters |
-| `eventType` | `EVENT` `PROBLEM` `RECOVERY` (`RECOVERY` needs `groupKey`) |
+| `groupKey` | optional; without it messages group by title; longer than 128 characters is hashed |
+| `eventType` | `EVENT` `PROBLEM` `RECOVERY` |
 | `occurredAt` | `Instant`, sent as UTC RFC 3339 with milliseconds |
 | `url` / `imageUrl` | `https://` only, no credentials (`imageUrl`: no `#fragment`; fetched by the server afterwards) |
 | `actions` (`action(title, url)`) | up to 3 `Action(title, url)` buttons, see [Actions](#actions) |
 | `metadata` (`meta(k, v)`) | ≤ 16 keys `[A-Za-z0-9_.-]{1,64}`; String (≤ 512 characters), Number or Boolean values |
 | `ttlSeconds` | push lifetime 60–86400 (default 3600) |
-| `sourceSequence` | 0 … 2^53-1, needs `groupKey` |
+| `sourceSequence` | 0 … 2^53-1, orders problems and recoveries |
 | `idempotencyKey` | 1–128 printable ASCII characters (also a `honk` argument) |
 
-null and empty optional fields are omitted. A returned `Accepted` means Honk! Honk! **durably stored**
-the message (202), not that a push was delivered or read.
+null and empty optional fields are omitted. The library does not check the other fields: the
+server delivers first, so a value that is too long is shortened and one it cannot use is left out,
+and the message is accepted with a [warning](#warnings). A returned `Accepted` means Honk! Honk!
+**durably stored** the message (202), not that a push was delivered or read.
 
 ```kotlin
 honk.loud("Disk 91%", "/var on app-01") { groupKey("disk/app-01/var") }
@@ -201,8 +203,30 @@ honk.honkAsync(Message.builder().title("Disk 91%").message("/var on app-01").lou
 ```
 
 Options (Kotlin named arguments or `Honk.builder()`): `timeoutMs` 5000 per attempt, `retries` 4,
-`deadlineMs` 30000, `defaults`, `validate` (false leaves all checks to the server), `backoff`,
-`httpClient` (configure it never to follow redirects), `userAgent`.
+`deadlineMs` 30000, `defaults`, `backoff`, `httpClient` (configure it never to follow redirects),
+`userAgent`, `onWarnings`.
+
+## Warnings
+
+When the server corrects something it still accepts the message (`202`), and says what it did:
+`Accepted.warnings` is a list of `Warning(field, code, message)`, empty when nothing was changed.
+Codes: `truncated`, `normalized`, `ignored`, `clamped`, `downgraded`, `hashed`. They are never
+thrown; log them and fix the sender when convenient.
+
+```kotlin
+val accepted = honk.honk(Message("Imported 1 204 rows", ttlSeconds = 5))
+accepted.warnings.forEach { println(it) }   // ttl_seconds clamped: …
+
+val honk = Honk(url, key, onWarnings = { warnings, accepted -> warnings.forEach { log.warn("honk {}: {}", accepted.id, it) } })
+```
+
+```java
+Honk honk = Honk.builder().url(url).key(key)
+    .onWarnings((warnings, accepted) -> warnings.forEach(w -> log.warn("honk {}: {}", accepted.getId(), w)))
+    .build();
+```
+
+`onWarnings` runs only for a send with warnings; an exception it throws is ignored.
 
 ## Actions
 
@@ -222,8 +246,9 @@ Java uses the same builder method (`Message.light(…).action("Call", "tel:+1555
 the constructor takes `actions = listOf(Action(title, url))`. A title is 1–40 characters on one
 line, shown as sent. A URL is at most 2048 bytes without spaces: `https://` (no credentials),
 `mailto:` with one address and an optional `?subject=…&body=…`, `tel:` with a number, or `sms:`
-with a number and an optional `?body=…`. Anything else (`http:`, `javascript:`, app schemes) is
-rejected as `actions[i].url`.
+with a number and an optional `?body=…`. The server leaves out an action it cannot use
+(`http:`, `javascript:`, app schemes) with an `ignored` warning on `actions[i].url`, and still
+delivers the message.
 
 ## Retries and idempotency, guaranteed
 
@@ -240,12 +265,14 @@ rejected as `actions[i].url`.
 ## Errors
 
 All exceptions are unchecked and extend `HonkException` (`status`, `code`, `requestId`,
-`idempotencyKey`, `attempts`, `retryAfter`, `isRetryable`).
+`idempotencyKey`, `attempts`, `retryAfter`, `isRetryable`). The exception message names the
+status, the code, the server's message, every refused field and the request id, e.g.
+`Honk 422 validation_failed: … (event_type must be one of event, problem, recovery) [request req_…]`.
 
 | Exception | When | What to do |
 |---|---|---|
-| `HonkValidationException` | rejected locally (`isLocal`) or `400`/`413`/`415`/`422`; `fields` lists every problem | fix the message |
-| `HonkAuthException` | `401 invalid_key`, `403 priority_not_allowed`, `project_suspended`, `workspace_suspended` | fix the key or the priority |
+| `HonkValidationException` | the server refused it (`400 invalid_json`, `413`, `415`, `422 unknown_field`, an invalid `event_type`); `fields` lists every refused field. `isLocal`: no message and no title, nothing sent | fix the message |
+| `HonkAuthException` | `401 invalid_key`, `403 project_suspended`, `workspace_suspended` | fix the key |
 | `HonkQuotaException` | `429 quota_exceeded` (daily) or `rate_limited`, after retries | retry after `retryAfter` |
 | `HonkConflictException` | `409 idempotency_conflict`: same key, different payload | new key or original payload |
 | `HonkNetworkException` / `HonkTimeoutException` | unreachable / no answer before the deadline | retry later, same key |

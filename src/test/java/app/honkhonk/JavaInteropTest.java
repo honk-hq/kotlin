@@ -84,6 +84,19 @@ class JavaInteropTest {
     }
 
     @Test
+    void javaWarnings() {
+        List<Warning> seen = new java.util.ArrayList<>();
+        try (MockServer server = new MockServer(Step.Companion.accepted(false, "[{\"field\":\"ttl_seconds\",\"code\":\"clamped\",\"message\":\"5 is below 60; sent as 60\"}]"));
+             Honk honk = Honk.builder().url(server.getUrl()).key(MockServerKt.TEST_KEY)
+                 .onWarnings((warnings, accepted) -> seen.addAll(warnings)).build()) {
+            Accepted accepted = honk.sendBlocking(Message.builder().message("x").ttlSeconds(5).build());
+            List<Warning> expected = List.of(new Warning("ttl_seconds", "clamped", "5 is below 60; sent as 60"));
+            assertEquals(expected, accepted.getWarnings());
+            assertEquals(expected, seen);
+        }
+    }
+
+    @Test
     void javaExceptions() {
         try (MockServer server = new MockServer(Step.Companion.error(429, "quota_exceeded", "3600", ""));
              Honk honk = new Honk(server.getUrl(), MockServerKt.TEST_KEY)) {
@@ -91,7 +104,8 @@ class JavaInteropTest {
             assertEquals(Duration.ofHours(1), e.getRetryAfter());
             assertTrue(e.isRetryable());
         }
-        assertThrows(HonkValidationException.class, () -> Message.builder().title("missing text").build());
+        assertThrows(HonkValidationException.class, () -> Message.builder().build());
+        assertEquals("missing text", Message.builder().title("missing text").build().getTitle());
         assertThrows(IllegalArgumentException.class, () -> new Honk("", "honk_x"));
     }
 }

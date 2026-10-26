@@ -6,9 +6,33 @@ All notable changes to `app.honk-honk:honk` (Maven) are documented here. The for
 
 ## [Unreleased]
 
+### Added
+- `Accepted.warnings`: what the server corrected before accepting the message (`Warning(field,
+  code, message)`; codes `truncated`, `normalized`, `ignored`, `clamped`, `downgraded`, `hashed`),
+  empty when nothing. An optional `onWarnings` hook (`WarningHandler`, also on `Honk.builder()`)
+  is called after a send that has any; an exception it throws is ignored.
+- A title-only message: `Message(title = "Deploy finished")` (`message` defaults to `""`); a
+  message or a title is required.
+
 ### Changed
+- **Breaking:** the library is a thin wrapper of the "deliver first" server (contracts/API.md
+  §5.1). It no longer checks field contents (lengths, enums, URLs, actions, metadata, TTL,
+  `source_sequence`, the 16 KiB body): the server shortens or leaves out what it cannot use and
+  accepts the message with a warning, and refuses only what it cannot deliver. Before sending,
+  only a missing message and title (and an Idempotency-Key a header cannot carry) throw
+  `HonkValidationException` with `isLocal`.
+- `uhoh`/`phew`/`problem`/`recovery` (and the `Message` builders) take a nullable `groupKey`:
+  recoveries and `sourceSequence` no longer need one; without one, messages group by title.
+- Exception messages end with the server's request id (`[request req_…]`).
+- Non-finite metadata numbers (`NaN`, infinities) are sent as text instead of failing the send.
+- The docs say that the level alone decides how the push interrupts, and that `URGENT` from a key
+  without "allow urgent" is sent as `HIGH` (it used to be `403 priority_not_allowed`).
 - The README and the POM's name, description and developer call the product Honk! Honk!; the
-  coordinate, the package and the API are unchanged.
+  coordinate and the package are unchanged.
+
+### Removed
+- **Breaking:** the `validate` option (constructor and `Honk.Builder.validate`) and the `Limits`
+  object.
 
 ## [0.4.0] - 2026-10-15
 

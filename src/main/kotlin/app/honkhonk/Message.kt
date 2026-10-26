@@ -3,17 +3,19 @@ package app.honkhonk
 import java.time.Instant
 
 /**
- * One event for `POST /v1/messages`. Only [message] is required; null fields are omitted, so the
- * server defaults apply (severity info, priority normal, source "api", environment "default",
- * channel "general", event type event, TTL 3600 s).
+ * One event for `POST /v1/messages`. A [message] or a [title] is required; null fields are omitted,
+ * so the server defaults apply (severity info, priority normal, source "api", environment
+ * "default", channel "general", event type event, TTL 3600 s). The SDK sends fields as they are:
+ * the server shortens what is too long and leaves out what is invalid, and lists each correction
+ * in [Accepted.warnings]. Only the level ([severity]) decides how loud the push is.
  *
  * Kotlin: `Message("nightly pg_dump took 42 s", title = "Backup finished", severity = Severity.BEEP)`.
  * Java: `Message.builder().title("Backup finished").message("nightly pg_dump took 42 s").beep().build()`.
  */
 public data class Message @JvmOverloads constructor(
-    /** Plain text, 1–8192 bytes of UTF-8. Line breaks and tabs are allowed. */
-    val message: String,
-    /** One line, ≤ 160 characters. Defaults to the first line of [message]. */
+    /** Plain text (the server keeps up to 8192 bytes of UTF-8). Line breaks and tabs are allowed. Empty: a title-only message. */
+    val message: String = "",
+    /** One line (the server keeps up to 160 characters). Defaults to the first line of [message]. */
     val title: String? = null,
     /** The Honk scale: LIGHT, BEEP, LOUD, LONG, BLAST (aliases of INFO … CRITICAL). */
     val severity: Severity? = null,
@@ -26,9 +28,9 @@ public data class Message @JvmOverloads constructor(
     /** ≤ 64 characters. */
     val channel: String? = null,
     /**
-     * ≤ 128 characters. Messages with the same key (per environment, source and channel) form one
-     * group. One key per customer request ("requests/<id>"); a shared key only for repeats of the
-     * same problem.
+     * Optional. Messages with the same key (per environment, source and channel) form one group;
+     * without one they group by their title. One key per customer request ("requests/<id>"); a
+     * shared key only for repeats of the same problem. The server hashes keys over 128 characters.
      */
     val groupKey: String? = null,
     val eventType: EventType? = null,
@@ -42,7 +44,7 @@ public data class Message @JvmOverloads constructor(
     val metadata: Map<String, Any> = emptyMap(),
     /** Push lifetime, 60–86400 seconds (default 3600). */
     val ttlSeconds: Int? = null,
-    /** Monotonic counter per source stream (0 … 2^53-1). Needs [groupKey]. */
+    /** Monotonic counter per source stream (0 … 2^53-1), for problem/recovery ordering. */
     val sourceSequence: Long? = null,
     /** A stable key for this event (1–128 printable ASCII characters), reused on every retry. */
     val idempotencyKey: String? = null,
@@ -132,9 +134,12 @@ public data class Message @JvmOverloads constructor(
         public fun sourceSequence(sourceSequence: Long?): Builder = apply { this.sourceSequence = sourceSequence }
         public fun idempotencyKey(idempotencyKey: String?): Builder = apply { this.idempotencyKey = idempotencyKey }
 
-        /** @throws HonkValidationException when the message text is missing. */
+        /** @throws HonkValidationException when there is neither a message nor a title. */
         public fun build(): Message {
-            val text = message ?: throw HonkValidationException.local(listOf(FieldError("message", "required", "message is required")))
+            val text = message.orEmpty()
+            if (text.isBlank() && title.isNullOrBlank()) {
+                throw HonkValidationException.local(listOf(FieldError("message", "required", "is required (send a message or a title)")))
+            }
             return Message(
                 text, title, severity, priority, category, source, environment, channel, groupKey, eventType,
                 occurredAt, url, imageUrl, LinkedHashMap(metadata), ttlSeconds, sourceSequence, idempotencyKey, ArrayList(actions),
@@ -149,21 +154,21 @@ public data class Message @JvmOverloads constructor(
 
         /** A problem for [groupKey] (opens or continues its incident); severity defaults to LONG (error). */
         @JvmStatic
-        public fun problem(groupKey: String, title: String?, message: String): Builder =
+        public fun problem(groupKey: String?, title: String?, message: String): Builder =
             builder().groupKey(groupKey).eventType(EventType.PROBLEM).severity(Severity.ERROR).title(title).message(message)
 
         /** A recovery for [groupKey] (closes its open incident); severity defaults to BEEP (success). */
         @JvmStatic
-        public fun recovery(groupKey: String, title: String?, message: String): Builder =
+        public fun recovery(groupKey: String?, title: String?, message: String): Builder =
             builder().groupKey(groupKey).eventType(EventType.RECOVERY).severity(Severity.SUCCESS).title(title).message(message)
 
         /** Uh-oh: the same builder as [problem] (a problem for [groupKey]; severity defaults to LONG). */
         @JvmStatic
-        public fun uhoh(groupKey: String, title: String?, message: String): Builder = problem(groupKey, title, message)
+        public fun uhoh(groupKey: String?, title: String?, message: String): Builder = problem(groupKey, title, message)
 
         /** Phew: the same builder as [recovery] (a recovery for [groupKey]; severity defaults to BEEP). */
         @JvmStatic
-        public fun phew(groupKey: String, title: String?, message: String): Builder = recovery(groupKey, title, message)
+        public fun phew(groupKey: String?, title: String?, message: String): Builder = recovery(groupKey, title, message)
 
         @JvmStatic public fun light(title: String?, message: String): Builder = builder().light().title(title).message(message)
 
@@ -194,9 +199,9 @@ public data class Message @JvmOverloads constructor(
  * phone does, when you tap the button.
  */
 public data class Action(
-    /** 1–40 characters, one line, shown as sent. */
+    /** Shown on the button (the server keeps up to 40 characters, one line). */
     val title: String,
-    /** `https://` (no credentials), `mailto:`, `tel:` or `sms:`, ≤ 2048 bytes. */
+    /** `https://`, `mailto:`, `tel:` or `sms:`. The server leaves out an action whose URL it cannot use (a warning). */
     val url: String,
 )
 
@@ -208,14 +213,40 @@ public data class Defaults @JvmOverloads constructor(
 )
 
 /** The 202 answer: durably stored (which does not mean a push was delivered). */
-public data class Accepted(
+public data class Accepted @JvmOverloads constructor(
     /** Message id (`msg_…`); the original id when [duplicate] is true. */
     val id: String,
     /** This idempotency key was already accepted with the same payload in the last 24 hours. */
     val duplicate: Boolean,
     /** When the server accepted it (the first time, for a duplicate). */
     val receivedAt: Instant,
+    /** What the server corrected before accepting the message; empty when nothing. */
+    val warnings: List<Warning> = emptyList(),
 )
+
+/**
+ * One correction the server made to an accepted message (contracts/API.md §5.1). Not an error:
+ * the message was delivered. Log it and fix the sender when convenient.
+ */
+public data class Warning(
+    /** Wire name: `title`, `metadata.order`, `actions[1].url`, … */
+    val field: String,
+    /** `truncated`, `normalized`, `ignored`, `clamped`, `downgraded` or `hashed` (others may be added). */
+    val code: String,
+    /** English, for logs: what was wrong and what was done. */
+    val message: String,
+) {
+    override fun toString(): String = "$field $code: $message"
+}
+
+/**
+ * Called after a send the server accepted with [Accepted.warnings] (never for an empty list), e.g.
+ * `Honk(url, key, onWarnings = { warnings, _ -> warnings.forEach { log.warn("Honk: {}", it) } })`.
+ * An exception it throws is ignored: the message was accepted.
+ */
+public fun interface WarningHandler {
+    public fun onWarnings(warnings: List<Warning>, accepted: Accepted)
+}
 
 /** Exponential backoff with full jitter: attempt n waits random(0, min(maxMs, baseMs·2ⁿ)), or Retry-After when longer. */
 public data class Backoff @JvmOverloads constructor(

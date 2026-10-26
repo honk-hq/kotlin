@@ -221,7 +221,7 @@ class HonkTest {
             Step.error(422, "validation_failed", extra = ""","fields":[{"field":"severity","code":"invalid_enum","message":"must be one of"}]""") to HonkValidationException::class,
             Step.error(413, "payload_too_large") to HonkValidationException::class,
             Step.error(401, "invalid_key") to HonkAuthException::class,
-            Step.error(403, "priority_not_allowed") to HonkAuthException::class,
+            Step.error(403, "project_suspended") to HonkAuthException::class,
             Step.error(409, "idempotency_conflict") to HonkConflictException::class,
             Step.error(404, "not_found") to HonkException::class,
         )
@@ -240,11 +240,100 @@ class HonkTest {
     }
 
     @Test
-    fun `validation errors expose fields`() = runBlocking {
-        MockServer(Step.error(422, "validation_failed", extra = ""","fields":[{"field":"image_url","code":"invalid_format","message":"must be https"}]""")).use { s ->
+    fun `server refusals expose code, fields and request id`() = runBlocking {
+        MockServer(Step.error(422, "validation_failed", extra = ""","fields":[{"field":"event_type","code":"invalid_enum","message":"must be one of event, problem, recovery"}]""")).use { s ->
             val e = assertFailsWith<HonkValidationException> { client(s.url).send(Message("x")) }
-            assertEquals(listOf(FieldError("image_url", "invalid_format", "must be https")), e.fields)
-            assertTrue(e.message!!.contains("image_url must be https"))
+            assertEquals(listOf(FieldError("event_type", "invalid_enum", "must be one of event, problem, recovery")), e.fields)
+            assertEquals("validation_failed", e.code)
+            assertEquals("req_test", e.requestId)
+            assertFalse(e.isLocal)
+            assertEquals(
+                "Honk 422 validation_failed: validation_failed happened (event_type must be one of event, problem, recovery) [request req_test]",
+                e.message,
+            )
+        }
+        MockServer(Step.error(422, "unknown_field", extra = ""","fields":[{"field":"colour","code":"not_allowed"}]""")).use { s ->
+            val e = assertFailsWith<HonkValidationException> { client(s.url).send(Message("x")) }
+            assertEquals("unknown_field", e.code)
+            assertTrue(e.message!!.contains("(colour not_allowed) [request req_test]"), e.message)
+        }
+        MockServer(Step.error(401, "invalid_key")).use { s ->
+            val e = assertFailsWith<HonkAuthException> { client(s.url).send(Message("x")) }
+            assertEquals("Honk 401 invalid_key: invalid_key happened [request req_test]", e.message)
+        }
+    }
+
+    @Test
+    fun `warnings are returned and passed to onWarnings`() = runBlocking {
+        val warnings = """[{"field":"title","code":"truncated","message":"title was 212 characters; shortened to 160"},""" +
+            """{"field":"actions[1].url","code":"ignored","message":"not an https, mailto, tel or sms URL; action left out"}]"""
+        val seen = mutableListOf<Pair<List<Warning>, String>>()
+        MockServer(Step.accepted(warnings = warnings), Step.accepted()).use { s ->
+            val honk = client(s.url, onWarnings = { w, accepted -> seen += w to accepted.id })
+            val accepted = honk.send(Message("x"))
+            val expected = listOf(
+                Warning("title", "truncated", "title was 212 characters; shortened to 160"),
+                Warning("actions[1].url", "ignored", "not an https, mailto, tel or sms URL; action left out"),
+            )
+            assertEquals(expected, accepted.warnings)
+            assertEquals("title truncated: title was 212 characters; shortened to 160", accepted.warnings[0].toString())
+            assertEquals(listOf(expected to "msg_01k6h3w4z5x6y7z8a9b0c1d2e3"), seen)
+            assertEquals(emptyList(), honk.send(Message("y")).warnings)
+            assertEquals(1, seen.size) // not called without warnings
+        }
+        MockServer(Step.accepted(warnings = warnings)).use { s ->
+            val accepted = client(s.url, onWarnings = { _, _ -> error("logger down") }).send(Message("x"))
+            assertEquals(2, accepted.warnings.size) // a failing hook never fails the send
+        }
+        MockServer(Step.Respond(202, """{"id":"msg_old","duplicate":false}""")).use { s ->
+            assertEquals(emptyList(), client(s.url).send(Message("x")).warnings) // an older server without warnings
+        }
+    }
+
+    @Test
+    fun `field contents are sent unchecked`() = runBlocking {
+        MockServer(Step.accepted()).use { s ->
+            client(s.url).send(
+                Message(
+                    "bell\u0007", title = "t".repeat(200), groupKey = "g".repeat(200), url = "http://example.com",
+                    ttlSeconds = 5, metadata = mapOf("bad key" to 1, "n" to Double.NaN),
+                    actions = listOf(Action("Open", "javascript:alert(1)"), Action("a", "tel:1"), Action("b", "tel:2"), Action("c", "tel:3")),
+                ),
+                "k-1",
+            )
+            client(s.url).send(Message("recovered", eventType = EventType.RECOVERY, sourceSequence = 3))
+            client(s.url).phew(null, "Backup OK", "fine")
+            val r = s.requests
+            assertEquals(3, r.size)
+            assertEquals("t".repeat(200), r[0].json["title"])
+            assertEquals(5L, r[0].json["ttl_seconds"])
+            assertEquals("http://example.com", r[0].json["url"])
+            assertEquals(mapOf("bad key" to 1L, "n" to "NaN"), r[0].json["metadata"])
+            assertEquals(4, (r[0].json["actions"] as List<*>).size)
+            assertEquals("""{"message":"recovered","event_type":"recovery","source_sequence":3}""", r[1].body)
+            assertEquals("""{"title":"Backup OK","message":"fine","severity":"success","event_type":"recovery"}""", r[2].body)
+        }
+    }
+
+    @Test
+    fun `a message or a title is enough, neither is refused before sending`() = runBlocking {
+        MockServer(Step.accepted()).use { s ->
+            val honk = client(s.url)
+            honk.send(Message(title = "Deploy finished"))
+            honk.send(Message.builder().title("Backup OK").build())
+            honk.beep("Title only", "")
+            assertEquals(
+                listOf("""{"title":"Deploy finished"}""", """{"title":"Backup OK"}""", """{"title":"Title only","severity":"success"}"""),
+                s.requests.map { it.body },
+            )
+            for (m in listOf(Message(""), Message("  ", title = " "))) {
+                val e = assertFailsWith<HonkValidationException> { honk.send(m) }
+                assertTrue(e.isLocal)
+                assertEquals(0, e.attempts)
+                assertEquals(listOf(FieldError("message", "required", "is required (send a message or a title)")), e.fields)
+            }
+            assertFailsWith<HonkValidationException> { Message.builder().build() }
+            assertEquals(3, s.requests.size)
         }
     }
 
@@ -276,11 +365,31 @@ class HonkTest {
     }
 
     @Test
-    fun `validate false leaves value checks to the server`() = runBlocking {
-        MockServer(Step.error(422, "validation_failed")).use { s ->
-            assertFailsWith<HonkValidationException> { client(s.url, validate = false).send(Message("x", ttlSeconds = 5)) }
-            assertEquals(5L, s.requests[0].json["ttl_seconds"])
+    fun `builder and idempotency keys a header cannot carry`() = runBlocking {
+        val m = Message.builder().title("New request").line("Customer: Ana").line("Company: Acme").loud().meta("request_id", "1").build()
+        assertEquals(Message("Customer: Ana\nCompany: Acme", title = "New request", severity = Severity.WARNING, metadata = mapOf("request_id" to "1")), m)
+        val reply = Action("Reply", "mailto:emily@example.com?subject=Your%20quote")
+        val withActions = Message.builder().message("Emily asked for a quote").action(reply.title, reply.url).actions(listOf(Action("Call", "tel:+15550134"))).build()
+        assertEquals(listOf(reply, Action("Call", "tel:+15550134")), withActions.actions)
+        assertEquals(withActions, withActions.toBuilder().build())
+        assertEquals(3, withActions.toBuilder().action("Open", "https://example.com").build().actions.size)
+        assertEquals(2, withActions.actions.size) // the builder copies, never shares
+        assertEquals(Severity.CRITICAL, Message.builder().message("x").severity("BLAST").build().severity)
+
+        val honk = Honk("https://honk.example.com", TEST_KEY)
+        for (key in listOf("", "x".repeat(129), "ünicode", "line\nbreak")) {
+            val e = assertFailsWith<HonkValidationException> { honk.send(Message("x"), key) }
+            assertEquals("Idempotency-Key", e.fields.first().field)
+            assertTrue(e.isLocal)
         }
+    }
+
+    @Test
+    fun `json round trip`() {
+        val text = Json.write(mapOf("s" to "a\"b\\c\n\u0001é", "n" to 1, "d" to 1.25, "b" to true, "z" to null, "l" to listOf(1, "x"), "i" to Double.POSITIVE_INFINITY))
+        assertEquals("""{"s":"a\"b\\c\n\u0001é","n":1,"d":1.25,"b":true,"z":null,"l":[1,"x"],"i":"Infinity"}""", text)
+        assertEquals(mapOf("s" to "a\"b\\c\n\u0001é", "n" to 1L, "d" to 1.25, "b" to true, "z" to null, "l" to listOf(1L, "x"), "i" to "Infinity"), Json.parse(text))
+        assertEquals(mapOf("u" to "é/"), Json.parse("""{ "u" : "é\/" }"""))
     }
 
     @Test

@@ -46,8 +46,9 @@ internal object Json {
         }
     }
 
+    /** JSON has no NaN or infinity: those are sent as text ("NaN", "Infinity"), so the message still goes out. */
     private fun number(d: Double): String {
-        require(d.isFinite()) { "JSON numbers must be finite" }
+        if (!d.isFinite()) return "\"$d\""
         return if (d == Math.rint(d) && kotlin.math.abs(d) < 1e15) d.toLong().toString() else d.toString()
     }
 
