@@ -37,6 +37,12 @@ internal object Wire {
         return Json.write(body)
     }
 
-    /** 1–128 printable ASCII characters: what an HTTP header can carry and the server accepts. */
-    fun validIdempotencyKey(key: String): Boolean = key.length in 1..128 && key.all { it.code in 0x21..0x7E }
+    /**
+     * Whether java.net.http sends [value] as a header exactly as given: printable ASCII and
+     * spaces. A control character could break the request, `HttpRequest.Builder.header` throws
+     * for anything beyond U+00FF, and other non-ASCII characters are not guaranteed to reach the
+     * server as given (they could arrive as a different, valid key). The server's own rules (an
+     * Idempotency-Key is 1–128 printable ASCII characters, a valid key) come back as its 422 / 401.
+     */
+    fun sendableHeaderValue(value: String): Boolean = value.all { it.code in 0x20..0x7E }
 }

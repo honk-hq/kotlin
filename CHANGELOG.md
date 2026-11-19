@@ -6,6 +6,8 @@ All notable changes to `app.honk-honk:honk` (Maven) are documented here. The for
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-19
+
 ### Added
 - `Accepted.warnings`: what the server corrected before accepting the message (`Warning(field,
   code, message)`; codes `truncated`, `normalized`, `ignored`, `clamped`, `downgraded`, `hashed`),
@@ -13,31 +15,38 @@ All notable changes to `app.honk-honk:honk` (Maven) are documented here. The for
   is called after a send that has any; an exception it throws is ignored.
 - A title-only message: `Message(title = "Deploy finished")` (`message` defaults to `""`); a
   message or a title is required.
+- `Honk.fromEnvironment(…)` takes `timeoutMs`, `retries`, `deadlineMs`, `backoff`, `httpClient`,
+  `userAgent` and `onWarnings` as well, with the constructor's defaults, so it configures
+  everything `Honk(url, key, …)` does.
 
 ### Changed
+- **Breaking:** the Maven coordinate is now `app.honk-honk:honk` and the package `app.honkhonk`.
 - **Breaking:** the library is a thin wrapper of the "deliver first" server (contracts/API.md
   §5.1). It no longer checks field contents (lengths, enums, URLs, actions, metadata, TTL,
   `source_sequence`, the 16 KiB body): the server shortens or leaves out what it cannot use and
   accepts the message with a warning, and refuses only what it cannot deliver. Before sending,
-  only a missing message and title (and an Idempotency-Key a header cannot carry) throw
+  only a missing message and title (and an Idempotency-Key a header cannot carry, below) throw
   `HonkValidationException` with `isLocal`.
+- The key is no longer required to start with `honk_` locally: a wrong key is sent and comes
+  back as the server's `401 invalid_key` (`HonkAuthException`). Only a missing key, or one that
+  is not printable ASCII (an HTTP header could not carry it as given), throws
+  `IllegalArgumentException`.
+- An `Idempotency-Key` is no longer checked against the 1–128 printable ASCII rule locally: one
+  that breaks it (a space, 129 characters) is sent and comes back as the server's
+  `422`, field `Idempotency-Key` `invalid_format`. Only a key java.net.http cannot send as given
+  (control or non-ASCII characters) throws `HonkValidationException` with `isLocal` before
+  sending.
 - `uhoh`/`phew`/`problem`/`recovery` (and the `Message` builders) take a nullable `groupKey`:
   recoveries and `sourceSequence` no longer need one; without one, messages group by title.
 - Exception messages end with the server's request id (`[request req_…]`).
 - Non-finite metadata numbers (`NaN`, infinities) are sent as text instead of failing the send.
 - The docs say that the level alone decides how the push interrupts, and that `URGENT` from a key
   without "allow urgent" is sent as `HIGH` (it used to be `403 priority_not_allowed`).
-- The README and the POM's name, description and developer call the product Honk! Honk!; the
-  coordinate and the package are unchanged.
+- The README and the POM's name, description and developer call the product Honk! Honk!.
 
 ### Removed
 - **Breaking:** the `validate` option (constructor and `Honk.Builder.validate`) and the `Limits`
   object.
-
-## [0.4.0] - 2026-10-15
-
-### Changed
-- The Maven coordinate is now `app.honk-honk:honk` and the package `app.honkhonk`.
 
 ## [0.3.0] - 2026-10-14
 

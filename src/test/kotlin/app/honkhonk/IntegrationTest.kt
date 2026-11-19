@@ -6,6 +6,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -89,6 +90,19 @@ class IntegrationTest {
         val e = assertFailsWith<HonkAuthException> { client("honk_000000000000_00000000000000000000000000000000").send(Message("x")) }
         assertEquals(401, e.status)
         assertEquals("invalid_key", e.code)
+        // A key without the honk_ prefix is sent too: the server refuses it.
+        val other = assertFailsWith<HonkAuthException> { client("hka_mobile").send(Message("x")) }
+        assertEquals(401, other.status)
+        assertEquals("invalid_key", other.code)
+    }
+
+    @Test
+    fun `an idempotency key outside the rule is the server's 422`() = runBlocking {
+        val e = assertFailsWith<HonkValidationException> { client().send(Message("bad key $run"), "has space") }
+        assertEquals(422, e.status)
+        assertFalse(e.isLocal)
+        assertEquals("Idempotency-Key", e.fields.first().field)
+        assertEquals("invalid_format", e.fields.first().code)
     }
 
     @Test

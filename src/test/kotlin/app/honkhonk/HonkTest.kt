@@ -365,7 +365,7 @@ class HonkTest {
     }
 
     @Test
-    fun `builder and idempotency keys a header cannot carry`() = runBlocking {
+    fun `builder`() {
         val m = Message.builder().title("New request").line("Customer: Ana").line("Company: Acme").loud().meta("request_id", "1").build()
         assertEquals(Message("Customer: Ana\nCompany: Acme", title = "New request", severity = Severity.WARNING, metadata = mapOf("request_id" to "1")), m)
         val reply = Action("Reply", "mailto:emily@example.com?subject=Your%20quote")
@@ -375,12 +375,71 @@ class HonkTest {
         assertEquals(3, withActions.toBuilder().action("Open", "https://example.com").build().actions.size)
         assertEquals(2, withActions.actions.size) // the builder copies, never shares
         assertEquals(Severity.CRITICAL, Message.builder().message("x").severity("BLAST").build().severity)
+    }
 
-        val honk = Honk("https://honk.example.com", TEST_KEY)
-        for (key in listOf("", "x".repeat(129), "ünicode", "line\nbreak")) {
-            val e = assertFailsWith<HonkValidationException> { honk.send(Message("x"), key) }
-            assertEquals("Idempotency-Key", e.fields.first().field)
-            assertTrue(e.isLocal)
+    @Test
+    fun `idempotency keys are left to the server unless unsendable`() = runBlocking {
+        MockServer(Step.accepted()).use { s ->
+            val honk = client(s.url)
+            for (key in listOf("tab\tkey", "line\nbreak", "nul\u0000", "del\u007F", "ünicode", "euro €")) {
+                val e = assertFailsWith<HonkValidationException> { honk.send(Message("x"), key) }
+                assertEquals("Idempotency-Key", e.fields.first().field)
+                assertEquals("invalid_format", e.fields.first().code)
+                assertTrue(e.isLocal)
+                assertEquals(0, e.attempts)
+            }
+            assertEquals(0, s.requests.size)
+            // Anything else is sent as given; the server answers 422 for what breaks its rule.
+            val long = "k".repeat(129)
+            for (key in listOf("has space", long)) honk.send(Message("x"), key)
+            assertEquals(listOf("has space", long), s.requests.map { it.header("Idempotency-Key") })
+        }
+        MockServer(
+            Step.error(422, "validation_failed", extra = ""","fields":[{"field":"Idempotency-Key","code":"invalid_format","message":"1-128 printable ASCII characters"}]"""),
+        ).use { s ->
+            val e = assertFailsWith<HonkValidationException> { client(s.url).send(Message("x"), "has space") }
+            assertFalse(e.isLocal)
+            assertEquals(422, e.status)
+            assertEquals(1, e.attempts)
+            assertEquals(listOf(FieldError("Idempotency-Key", "invalid_format", "1-128 printable ASCII characters")), e.fields)
+            assertEquals(1, s.requests.size)
+        }
+    }
+
+    @Test
+    fun `any other key is the server's to judge`() = runBlocking {
+        MockServer(Step.error(401, "invalid_key")).use { s ->
+            val e = assertFailsWith<HonkAuthException> { Honk(s.url, " hka_mobile ", retries = 0).send(Message("x")) }
+            assertEquals(401, e.status)
+            assertEquals("invalid_key", e.code)
+            assertEquals(1, e.attempts)
+            assertEquals(listOf("Bearer hka_mobile"), s.requests.map { it.header("Authorization") })
+        }
+    }
+
+    @Test
+    fun `fromEnvironment takes the constructor's options`() = runBlocking {
+        MockServer(Step.error(503, "unavailable"), Step.accepted(warnings = """[{"field":"title","code":"truncated","message":"shortened"}]""")).use { s ->
+            val seen = mutableListOf<List<Warning>>()
+            val honk = Honk.fromEnvironment(
+                mapOf("HONK_URL" to s.url, "HONK_KEY" to TEST_KEY, "HONK_CHANNEL" to "ops"),
+                timeoutMs = 2_000,
+                retries = 1,
+                deadlineMs = 10_000,
+                backoff = Backoff(1, 2),
+                userAgent = "cron-job/1.0",
+                onWarnings = { warnings, _ -> seen.add(warnings) },
+            )
+            assertEquals(2_000L, honk.timeoutMs)
+            assertEquals(1, honk.retries)
+            assertEquals(10_000L, honk.deadlineMs)
+            assertEquals(Backoff(1, 2), honk.backoff)
+            honk.send(Message("x"))
+            assertEquals(2, s.requests.size)
+            assertEquals("honk-kotlin/${Honk.VERSION} cron-job/1.0", s.requests[0].header("User-Agent"))
+            assertEquals("ops", s.requests[0].json["channel"])
+            assertEquals(listOf(listOf("truncated")), seen.map { w -> w.map { it.code } })
+            honk.close()
         }
     }
 
@@ -416,7 +475,8 @@ class HonkTest {
     fun `construction rejects missing or malformed url and key`() {
         val cases = listOf(
             Triple("", TEST_KEY, "HONK_URL"), Triple("honk.example.com", TEST_KEY, "https://"),
-            Triple("https://h", "", "HONK_KEY"), Triple("https://h", "hka_mobile", "honk_"),
+            Triple("https://h", "", "HONK_KEY"), Triple("https://h", "honk_ab\u007Fcd", "printable ASCII"),
+            Triple("https://h", "honk_ab\ncd", "printable ASCII"), Triple("https://h", "honk_€", "printable ASCII"),
         )
         for ((url, key, needle) in cases) {
             val e = assertFailsWith<IllegalArgumentException> { Honk(url, key) }
@@ -429,6 +489,11 @@ class HonkTest {
     fun `fromEnvironment and UUIDv7 and Retry-After`() {
         val honk = Honk.fromEnvironment(mapOf("HONK_URL" to "https://honk.example.com", "HONK_KEY" to TEST_KEY, "HONK_SOURCE" to "cron"))
         assertEquals(Defaults("cron"), honk.defaults)
+        assertEquals(5_000L, honk.timeoutMs)
+        assertEquals(4, honk.retries)
+        assertEquals(30_000L, honk.deadlineMs)
+        assertEquals(Backoff(), honk.backoff)
+        assertNull(honk.onWarnings)
 
         val a = UuidV7.generate(1_700_000_000_000)
         val b = UuidV7.generate(1_700_000_000_001)

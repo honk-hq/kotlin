@@ -42,7 +42,10 @@ import kotlin.random.Random
 public class Honk @JvmOverloads constructor(
     /** Base address of your Honk server, e.g. `https://honk.example.com`. */
     url: String,
-    /** A project ingestion key (`honk_…`). Keep it on the server. */
+    /**
+     * A project ingestion key (`honk_…`). Keep it on the server. Only a missing key or one a
+     * header cannot carry is refused here; a wrong key is the server's `401 invalid_key`.
+     */
     key: String,
     /** Timeout of one HTTP attempt. */
     public val timeoutMs: Long = 5_000,
@@ -74,8 +77,10 @@ public class Honk @JvmOverloads constructor(
         require(Regex("^https?://[^/]+.*", RegexOption.IGNORE_CASE).matches(base)) { "Honk: url must start with https:// (got \"$url\")" }
         val k = key.trim()
         require(k.isNotEmpty()) { "Honk: key is required (a project ingestion key honk_…; is HONK_KEY set?)" }
-        require(k.startsWith("honk_") && k.all { it.code in 0x21..0x7E }) {
-            "Honk: key must be a project ingestion key starting with honk_ (create one under Project → Keys)"
+        // Only what an HTTP header cannot carry is refused here; any other key is the server's to
+        // judge (401 invalid_key).
+        require(Wire.sendableHeaderValue(k)) {
+            "Honk: key must be printable ASCII (it could not be sent as a header as given)"
         }
         require(timeoutMs > 0 && deadlineMs > 0 && retries >= 0 && backoff.baseMs > 0 && backoff.maxMs > 0) {
             "Honk: timeoutMs, deadlineMs and backoff must be positive, retries ≥ 0"
@@ -99,15 +104,24 @@ public class Honk @JvmOverloads constructor(
      * to [onWarnings]). It refuses only what it cannot deliver ([HonkValidationException]).
      *
      * @param idempotencyKey a stable key for this event (1–128 printable ASCII characters);
-     *   default: the message's, else a new UUIDv7. Reused on every retry.
+     *   default: the message's, else a new UUIDv7. Reused on every retry. Only a key a header
+     *   cannot carry as given (control or non-ASCII characters) is refused before sending;
+     *   any other key outside the rule is the server's `422`.
      * @throws HonkException (or a subclass); coroutine cancellation propagates as usual.
      */
     public suspend fun send(message: Message, idempotencyKey: String? = null): Accepted {
         val body = Wire.encode(message, defaults)
         val key = idempotencyKey ?: message.idempotencyKey ?: UuidV7.generate()
-        if (!Wire.validIdempotencyKey(key)) {
+        // Only a key a header cannot carry is refused here; the server checks the rest (422).
+        if (!Wire.sendableHeaderValue(key)) {
             throw HonkValidationException.local(
-                listOf(FieldError("Idempotency-Key", "invalid_format", "use 1-128 printable ASCII characters without spaces, e.g. \"request-4812\"")),
+                listOf(
+                    FieldError(
+                        "Idempotency-Key",
+                        "invalid_format",
+                        "cannot be sent as a header as given (control or non-ASCII characters); use 1-128 printable ASCII characters, e.g. \"request-4812\"",
+                    ),
+                ),
             )
         }
         val target = URI.create("$url/v1/messages")
@@ -279,13 +293,32 @@ public class Honk @JvmOverloads constructor(
         /** The SDK version, sent in the User-Agent (generated from VERSION_NAME in gradle.properties). */
         public const val VERSION: String = SDK_VERSION
 
-        /** Reads `HONK_URL`, `HONK_KEY` and the optional `HONK_SOURCE`, `HONK_ENVIRONMENT`, `HONK_CHANNEL` defaults. */
+        /**
+         * Reads `HONK_URL`, `HONK_KEY` and the optional `HONK_SOURCE`, `HONK_ENVIRONMENT`, `HONK_CHANNEL`
+         * defaults. The other parameters are the constructor's, with the same defaults.
+         */
         @JvmStatic
         @JvmOverloads
-        public fun fromEnvironment(environment: Map<String, String> = System.getenv()): Honk = Honk(
+        public fun fromEnvironment(
+            environment: Map<String, String> = System.getenv(),
+            timeoutMs: Long = 5_000,
+            retries: Int = 4,
+            deadlineMs: Long = 30_000,
+            backoff: Backoff = Backoff(),
+            httpClient: HttpClient? = null,
+            userAgent: String? = null,
+            onWarnings: WarningHandler? = null,
+        ): Honk = Honk(
             url = environment["HONK_URL"].orEmpty(),
             key = environment["HONK_KEY"].orEmpty(),
+            timeoutMs = timeoutMs,
+            retries = retries,
+            deadlineMs = deadlineMs,
             defaults = Defaults(environment["HONK_SOURCE"], environment["HONK_ENVIRONMENT"], environment["HONK_CHANNEL"]),
+            backoff = backoff,
+            httpClient = httpClient,
+            userAgent = userAgent,
+            onWarnings = onWarnings,
         )
 
         /** A builder, for Java: `Honk.builder().url(url).key(key).timeoutMs(3000).build()`. */

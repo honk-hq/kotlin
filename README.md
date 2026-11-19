@@ -72,9 +72,11 @@ honk.honkBlocking(Message.beep("Backup finished", "nightly pg_dump took 42 s").b
 ```
 
 Explicitly: `Honk(url, key)` in Kotlin (named arguments for the options), or
-`Honk.builder().url(url).key(key).timeoutMs(3000).build()` in Java. A missing or malformed URL
-or key throws `IllegalArgumentException`. Create one `Honk` per application and `close()` it on
-shutdown.
+`Honk.builder().url(url).key(key).timeoutMs(3000).build()` in Java. A missing or malformed URL,
+or a missing key (or one that is not printable ASCII), throws `IllegalArgumentException`; a wrong
+key is the server's `401 invalid_key` (`HonkAuthException`). `fromEnvironment` takes the same
+options as the constructor (`timeoutMs`, `retries`, `deadlineMs`, `backoff`, `httpClient`,
+`userAgent`, `onWarnings`). Create one `Honk` per application and `close()` it on shutdown.
 
 ## The Honk scale
 
@@ -271,7 +273,7 @@ status, the code, the server's message, every refused field and the request id, 
 
 | Exception | When | What to do |
 |---|---|---|
-| `HonkValidationException` | the server refused it (`400 invalid_json`, `413`, `415`, `422 unknown_field`, an invalid `event_type`); `fields` lists every refused field. `isLocal`: no message and no title, nothing sent | fix the message |
+| `HonkValidationException` | the server refused it (`400 invalid_json`, `413`, `415`, `422 unknown_field`, an invalid `event_type`); `fields` lists every refused field. `isLocal`: no message and no title, or an `idempotencyKey` a header cannot carry (control or non-ASCII characters), nothing sent | fix the message |
 | `HonkAuthException` | `401 invalid_key`, `403 project_suspended`, `workspace_suspended` | fix the key |
 | `HonkQuotaException` | `429 quota_exceeded` (daily) or `rate_limited`, after retries | retry after `retryAfter` |
 | `HonkConflictException` | `409 idempotency_conflict`: same key, different payload | new key or original payload |
